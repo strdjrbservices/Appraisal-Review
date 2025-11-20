@@ -1,9 +1,23 @@
 {% extends 'base.html' %}
 {% load math_filters %}
+{% load dict_helpers %}
 
-{% block title %}Select Section to Extract{% endblock %}
+{% block title %}Select Section to Review{% endblock %}
 {% block extra_css %}
 <style>
+    :root {
+        --primary-bg: #f8fafc;
+        --card-bg: #ffffff;
+        --border-color: #e5e7eb;
+        --text-primary: #1f2937;
+        --text-secondary: #6b7280;
+        --accent-color: #3b82f6;
+        --accent-hover: #2563eb;
+        --green-bg: #f0fdf4;
+        --green-border: #bbf7d0;
+        --green-text: #166534;
+    }
+
     @keyframes fadeInUp {
         from {
             opacity: 0;
@@ -15,179 +29,244 @@
         }
     }
 
-    .home-container {
-        max-width: 800px;
-        margin: 2rem auto;
-        padding: 0 1rem;
+    body {
+        background-color: var(--primary-bg);
     }
 
-    .success-card {
-        background-color: #e8f5e9; /* Lighter green */
-        border-left: 5px solid #2e7d32;
-        padding: 1.5rem;
-        margin-bottom: 2.5rem;
+    .home-container {
+        max-width: 1400px;
+        margin: 2rem auto;
+        padding: 0 2rem;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+    }
+
+    .page-header h1 {
+        font-size: 2.25rem;
+        color: var(--text-primary);
+        margin: 0;
+    }
+
+    .user-info {
+        text-align: right;
+    }
+
+    .user-info .username {
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .user-info .logout-link {
+        font-size: 0.9em;
+        color: var(--accent-color);
+        text-decoration: none;
+    }
+
+    .main-grid {
+        display: grid;
+        grid-template-columns: 1fr 2fr;
+        gap: 2rem;
+        align-items: start;
+    }
+
+    .file-details-column {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .card {
+        background-color: var(--card-bg);
         border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        opacity: 0; /* Initially hidden for animation */
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+        padding: 1.5rem;
+        opacity: 0;
         animation: fadeInUp 0.6s ease-out forwards;
     }
 
-    .success-card h2 {
+    .card h3 {
         margin-top: 0;
-        color: #2e7d32;
+        margin-bottom: 1rem;
+        font-size: 1.25rem;
+        color: var(--text-primary);
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 0.75rem;
     }
 
-    .success-card p {
-        margin-bottom: 0.5rem;
-        color: #555;
+    .detail-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        font-size: 0.95rem;
     }
 
-    .success-card .filename {
-        font-size: 0.9em;
-        color: #777;
-        margin-top: 1rem;
+    .detail-item strong {
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+
+    .detail-item span {
+        color: var(--text-primary);
+        font-weight: 600;
+        text-align: right;
+    }
+
+    .filename {
+        font-size: 0.85em;
+        color: var(--text-secondary);
+        word-break: break-all;
+        margin-top: 0.5rem;
+    }
+
+    .sections-column {
+        background-color: var(--card-bg);
+        border-radius: 8px;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+        padding: 1.5rem;
+        opacity: 0;
+        animation: fadeInUp 0.6s 0.2s ease-out forwards;
+    }
+
+    .sections-column h2 {
+        margin-top: 0;
+        margin-bottom: 1.5rem;
     }
 
     .section-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1.5rem;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 1rem;
     }
 
     .section-button {
-        background-color: #ffffff;
-        border: 1px solid #ddd;
+        background-color: #f9fafb;
+        border: 1px solid var(--border-color);
         border-radius: 8px;
-        padding: 1.5rem;
+        padding: 1.25rem;
         text-align: center;
         text-decoration: none;
-        color: #333;
+        color: var(--text-secondary);
         font-weight: 600;
-        font-size: 1.1em;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        font-size: 1rem;
         transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-        opacity: 0; /* Initially hidden for animation */
-        animation: fadeInUp 0.5s ease-out forwards;
     }
 
     .section-button:hover {
         transform: translateY(-5px);
-        box-shadow: 0 8px 12px rgba(0,0,0,0.1);
-        color: #007bff;
-    }    
-
-    .suggested-prompts {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-        margin-top: 1rem;
-        margin-bottom: 1.5rem;
+        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+        color: var(--accent-color);
+        border-color: var(--accent-color);
     }
 
-    .prompt-suggestion-btn {
-        background-color: #e9ecef;
-        border: 1px solid #dee2e6;
-        color: #495057;
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        font-size: 0.9em;
-        font-weight: 500;
-        cursor: pointer;
-        transition: background-color 0.2s, color 0.2s, border-color 0.2s;
-    }
-    .prompt-suggestion-btn:hover {
-        background-color: #d0e3ff;
-        color: #004085;
-        border-color: #b8daff;
-    }
-    .analysis-card {
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        padding: 1.5rem;
+    .footer-actions {
+        text-align: center;
         margin-top: 2.5rem;
-        margin-bottom: 2.5rem;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        animation: fadeInUp 0.6s 0.5s ease-out forwards;
-        opacity: 0;
-    }
-
-    .analysis-card h3 {
-        margin-top: 0;
-        color: #343a40;
-    }
-
-    .analysis-card textarea {
-        width: 100%;
-        padding: 0.75rem;
-        border-radius: 6px;
-        border: 1px solid #ced4da;
-        font-family: inherit;
-        font-size: 1rem;
-        margin-top: 1rem;
-        min-height: 80px;
-        resize: vertical;
-    }
-
-    .analysis-card textarea:focus {
-        border-color: #007bff;
-        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-        outline: none;
-    }
-
-    .analysis-card .btn-submit {
-        background-color: #28a745;
-        color: white;
-        margin-top: 1rem;
-        border: none; /* Override .section-button border */
-        cursor: pointer;
-    }
-
-    .analysis-card .btn-submit:hover {
-        background-color: #218838;
-        color: white; /* Ensure text color remains white on hover */
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--border-color);
     }
 
     .upload-another-link {
         display: inline-block;
-        color: #5c677d;
+        color: var(--text-secondary);
         text-decoration: none;
         border-bottom: 1px solid transparent;
         transition: color 0.2s, border-color 0.2s;
+        font-weight: 500;
     }
 
     .upload-another-link:hover {
-        color: #333;
-        border-bottom-color: #333;
+        color: var(--text-primary);
+        border-bottom-color: var(--text-primary);
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="home-container">
-    <div class="success-card">
-        <h2>PDF Uploaded Successfully!</h2>
-        <p>Select a section below to extract and display its data.</p>
-        <p><strong>Review Time:</strong> <span id="review-timer">00:00:00</span></p>
-        <p class="filename"><strong>File:</strong> {{ filename }}</p>
-    </div>
-
-    <div class="section-grid">
-        {% for section_name, display_name in sections.items %}
-            {% if section_name == 'custom_analysis' %}
-                <a href="{% url 'extract_section' filename=filename section_name=section_name %}" class="section-button" style="animation-delay: { forloop.counter0|multiply:0.1 }s;">
-                    {{ display_name }}
-                </a>
-            {% else %}
-                <a href="{% url 'extract_section' filename=filename section_name=section_name %}" class="section-button" style="animation-delay: { forloop.counter0|multiply:0.1 }s;">
-                    {{ display_name }}
-                </a>
+    <div class="page-header">
+        <h1>Review Dashboard</h1>
+        <div class="user-info">
+            {% if user.is_authenticated %}
+                <p class="username">Welcome, {{ user.username }}</p>
+                <a href="{% url 'logout' %}" class="logout-link">Logout</a>
             {% endif %}
-        {% endfor %}
+        </div>
     </div>
 
-    <div style="text-align: center; margin-top: 3rem;">
-        <a href="{% url 'upload_pdf' %}" class="upload-another-link">Upload a different file</a>
+    <div class="main-grid">
+        <div class="file-details-column">
+            <div class="card">
+                <h3>File Details</h3>
+                <div class="detail-item">
+                    <strong>Review Time:</strong>
+                    <span><span id="review-timer">00:00:00</span></span>
+                </div>
+                <p class="filename"><strong>File:</strong> {{ filename }}</p>
+                <hr style="border-color: var(--border-color); margin: 1rem 0;">
+                {% if base_info and not base_info.error %}
+                    <div class="detail-item">
+                        <strong>Main Form:</strong>
+                        <span>{{ base_info|get_item:"APPRAISAL FORM TYPE (1004/1025/1004D/1073)"|default:"-" }}</span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Add-ons:</strong>
+                        <span>{{ base_info|get_item:"Additional Form (1007/216/Rental/STR)"|default:"None" }}</span>
+                    </div>
+                {% endif %}
+            </div>
+
+            {% if html_data or purchase_data or engagement_data %}
+            <div class="card" style="animation-delay: 0.1s;">
+                <h3>Supporting Documents</h3>
+                {% if html_data %}
+                    <div class="detail-item">
+                        <strong>Client (Order):</strong>
+                        <span>{{ html_data|get_item:"Client/Lender Name"|default:"-" }}</span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Borrower (Order):</strong>
+                        <span>{{ html_data|get_item:"Borrower (and Co-Borrower)"|default:"-" }}</span>
+                    </div>
+                {% endif %}
+                {% if purchase_data %}
+                    <div class="detail-item">
+                        <strong>Contract Price:</strong>
+                        <span>{{ purchase_data|get_item:"Contract Price"|default:"-" }}</span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Contract Date:</strong>
+                        <span>{{ purchase_data|get_item:"Date of Contract"|default:"-" }}</span>
+                    </div>
+                {% endif %}
+                {% if engagement_data %}
+                    <div class="detail-item">
+                        <strong>Engagement Fee:</strong>
+                        <span>{{ engagement_data|get_item:"Appraisal Fee"|default:engagement_data|get_item:"Total Fee"|default:"-" }}</span>
+                    </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="sections-column">
+            <h2>Select a section to review</h2>
+            <div class="section-grid">
+                {% for section_name, display_name in sections.items %}
+                    <a href="{% url 'extract_section' filename=filename section_name=section_name %}" class="section-button">
+                        {{ display_name }}
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="footer-actions">
+        <a href="{% url 'upload_pdf' %}" class="upload-another-link">← Upload a different file</a>
     </div>
 </div>
 {% endblock %}
@@ -195,7 +274,6 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // --- Review Timer Functionality ---
     const timerDisplay = document.getElementById('review-timer');
     if (timerDisplay) {
         let timerInterval;

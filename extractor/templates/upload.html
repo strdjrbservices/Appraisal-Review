@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Upload Appraisal PDF{% endblock %} 
+{% block title %}Appraisal Report Review{% endblock %} 
 
 {% block content %}
 <style>
@@ -19,6 +19,12 @@
         text-align: center;
         transition: box-shadow 0.3s ease;
     }
+    .header-logout {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        font-size: 0.9em;
+    }
 
     #upload-form h2 {
         margin-top: 0;
@@ -27,29 +33,34 @@
         font-weight: 600;
     }
 
-    /* New styles for the file input area */
-    #file-drop-zone {
-        border: 2px dashed #d1d5db;
-        border-radius: 12px;
-        padding: 2.5rem;
+    .file-upload-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
         width: 100%;
-        text-align: center;
-        cursor: pointer;
-        transition: border-color 0.3s, background-color 0.3s;
         margin-bottom: 1.5rem;
     }
 
-    #file-drop-zone:hover, #file-drop-zone.dragover {
+    .file-drop-zone {
+        border: 2px dashed #d1d5db;
+        border-radius: 12px;
+        padding: 1.5rem;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.3s, background-color 0.3s;
+    }
+
+    .file-drop-zone:hover, .file-drop-zone.dragover {
         background-color: #f9fafb;
         border-color: #3b82f6;
     }
 
-    #file-drop-zone .drop-zone-text {
+    .file-drop-zone .drop-zone-text {
         color: #6b7280;
         font-weight: 500;
     }
 
-    #file-drop-zone .browse-link {
+    .file-drop-zone .browse-link {
         color: #3b82f6;
         font-weight: 600;
     }
@@ -86,72 +97,115 @@
         background-color: #0056b3;
     }
 
-    #file-name {
+    .file-name {
         color: #1f2937;
         font-weight: 500;
         margin-top: 1rem;
         display: block; /* Make it a block to sit below the text */
+        font-size: 0.9em;
+        word-break: break-all;
+    }
+
+    .comparison-tools {
+        margin-top: 2rem;
+        font-size: 0.9em;
+        border-top: 1px solid #e5e7eb;
+        padding-top: 1.5rem;
+        width: 100%;
+    }
+    .comparison-tools p {
+        color: #6b7280;
+        margin-bottom: 1rem;
+        font-weight: 500;
+    }
+    .tool-links {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .tool-link {
+        display: inline-block;
+        padding: 0.6rem 1.2rem;
+        background-color: #f3f4f6;
+        color: #374151;
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: 500;
+        transition: background-color 0.2s, color 0.2s;
+        border: 1px solid #e5e7eb;
     }
 </style>
+<div class="header-logout">
+    {% if user.is_authenticated %}
+        Welcome, {{ user.username }} | <a href="{% url 'logout' %}">Logout</a>
+    {% endif %}
+</div>
     <form id="upload-form" method="post" enctype="multipart/form-data">
-        <h2>Upload Appraisal PDF</h2>
+        <h2>Full File Reviewer</h2>
         {% csrf_token %}
         
-        <div id="file-drop-zone">
-            <p class="drop-zone-text">
-                Drag & Drop your PDF here or 
-                <span class="browse-link">browse files</span>
-            </p>
-            <span id="file-name"></span>
+        <div class="file-upload-container">
+            <div id="file-drop-zone-pdf" class="file-drop-zone">
+                <p class="drop-zone-text"><strong>Appraisal PDF (Required):</strong><br>Drag & Drop or <span class="browse-link">browse</span></p>
+                <span id="file-name-pdf" class="file-name"></span>
+            </div>
+            <div id="file-drop-zone-html" class="file-drop-zone">
+                <p class="drop-zone-text"><strong>Order Form HTML (Optional):</strong><br>Drag & Drop or <span class="browse-link">browse</span></p>
+                <span id="file-name-html" class="file-name"></span>
+            </div>
+            <div id="file-drop-zone-purchase" class="file-drop-zone">
+                <p class="drop-zone-text"><strong>Purchase Copy (Optional):</strong><br>Drag & Drop or <span class="browse-link">browse</span></p>
+                <span id="file-name-purchase" class="file-name"></span>
+            </div>
+            <div id="file-drop-zone-engagement" class="file-drop-zone">
+                <p class="drop-zone-text"><strong>Engagement Letter (Optional):</strong><br>Drag & Drop or <span class="browse-link">browse</span></p>
+                <span id="file-name-engagement" class="file-name"></span>
+            </div>
         </div>
 
         <input id="pdf_file" type="file" name="pdf_file" accept="application/pdf" required>
-        <button type="submit" class="btn">Upload and Extract</button>
+        <input id="html_file" type="file" name="html_file" accept=".html,.htm">
+        <input id="purchase_copy_file" type="file" name="purchase_copy_file" accept="application/pdf">
+        <input id="engagement_letter_file" type="file" name="engagement_letter_file" accept="application/pdf">
+        <button type="submit" class="btn">Start Reviewer</button>
 
-        <div style="margin-top: 2rem; font-size: 0.9em;">
-            <p style="color: #6b7280; margin-bottom: 0.5rem;">Or, use a comparison tool:</p>
-            <a href="{% url 'compare_pdfs' %}" style="color: #007bff; margin-right: 1rem;" target="_blank" rel="noopener noreferrer">Compare two PDFs</a>
-            <span style="color: #ccc;">|</span>
-            <a href="{% url 'compare_html_pdf' %}" style="color: #007bff; margin-left: 1rem;" target="_blank" rel="noopener noreferrer">Verify PDF vs. HTML</a>
+        <div class="comparison-tools">
+            <p>Or, use a comparison tool:</p>
+            <div class="tool-links">
+                <a href="{% url 'compare_pdfs_upload' %}" class="tool-link" target="_blank" rel="noopener noreferrer">Update File Review (Compare two PDFs)</a>
+                <a href="{% url 'compare_html_pdf_upload' %}" class="tool-link" target="_blank" rel="noopener noreferrer">Verify Report vs. Order Form</a>
+                <a href="{% url 'escalation_check_upload' %}" class="tool-link" target="_blank" rel="noopener noreferrer">Escalation Check</a>
+            </div>
         </div>
     </form>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const dropZone = document.getElementById('file-drop-zone');
-        const fileInput = document.getElementById('pdf_file');
-        const fileNameDisplay = document.getElementById('file-name');
+        function setupDragAndDrop(dropZoneId, fileInputId, fileNameId) {
+            const dropZone = document.getElementById(dropZoneId);
+            const fileInput = document.getElementById(fileInputId);
+            const fileNameDisplay = document.getElementById(fileNameId);
+            if (!dropZone || !fileInput || !fileNameDisplay) return;
 
-        // Open file dialog when drop zone is clicked
-        dropZone.addEventListener('click', () => fileInput.click());
-
-        // Add dragover class for visual feedback
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('dragover');
-        });
-
-        // Remove dragover class
-        ['dragleave', 'dragend'].forEach(type => {
-            dropZone.addEventListener(type, () => dropZone.classList.remove('dragover'));
-        });
-
-        // Handle dropped file
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('dragover');
-            if (e.dataTransfer.files.length) {
-                fileInput.files = e.dataTransfer.files;
-                fileNameDisplay.textContent = fileInput.files[0].name;
+            dropZone.addEventListener('click', () => fileInput.click());
+            dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+            ['dragleave', 'dragend'].forEach(type => { dropZone.addEventListener(type, () => dropZone.classList.remove('dragover')); });
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                if (e.dataTransfer.files.length) {
+                    fileInput.files = e.dataTransfer.files;
+                    fileNameDisplay.textContent = fileInput.files[0].name;
+                }
             }
-        });
-
-        // Update file name when selected via browse
-        fileInput.addEventListener('change', () => {
-            if (fileInput.files.length) {
-                fileNameDisplay.textContent = fileInput.files[0].name;
-            }
-        });
+            );
+            fileInput.addEventListener('change', () => { if (fileInput.files.length) { fileNameDisplay.textContent = fileInput.files[0].name; } });
+        }
+        setupDragAndDrop('file-drop-zone-pdf', 'pdf_file', 'file-name-pdf');
+        setupDragAndDrop('file-drop-zone-html', 'html_file', 'file-name-html');
+        setupDragAndDrop('file-drop-zone-purchase', 'purchase_copy_file', 'file-name-purchase');
+        setupDragAndDrop('file-drop-zone-engagement', 'engagement_letter_file', 'file-name-engagement');
     });
 </script>
 {% endblock %}

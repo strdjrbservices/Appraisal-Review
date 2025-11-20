@@ -162,8 +162,27 @@ def compare_data_sets(pdf_data, html_data):
                 is_match = first_name_match and last_name_match
             else:
                 is_match = html_norm in pdf_norm
+        elif key == 'Appraisal Type':
+            # Special, more intelligent logic for Appraisal Type
+            def get_appraisal_keywords(value_str):
+                """Extracts a set of keywords from the appraisal type string."""
+                if not isinstance(value_str, str):
+                    return set()
+                
+                s = value_str.lower()
+                keywords = set()
+                if '1007' in s or 'str rental' in s or 'rent schedule' in s:
+                    keywords.add('1007')
+                if '216' in s or 'operating income' in s:
+                    keywords.add('216')
+                return keywords
+
+            pdf_keywords = get_appraisal_keywords(pdf_value)
+            html_keywords = get_appraisal_keywords(html_value)
+
+            # Match if the keywords found in the HTML are a subset of (or equal to) the keywords in the PDF.
+            is_match = html_keywords.issubset(pdf_keywords)
         elif key in substring_match_fields:
-            # For Appraisal and Transaction Type, check if HTML value is a substring of PDF value
             is_match = html_norm in pdf_norm
         elif key in space_agnostic_fields:
             is_match = normalize_space_agnostic(pdf_value) == normalize_space_agnostic(html_value)

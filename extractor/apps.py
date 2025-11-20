@@ -1,8 +1,10 @@
 from django.apps import AppConfig
+from django.contrib import admin
 
 class ExtractorConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'extractor'
+    default_site = 'extractor.admin_site.CustomAdminSite'
 
     def ready(self):
         """

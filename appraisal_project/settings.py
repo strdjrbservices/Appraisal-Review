@@ -23,16 +23,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-wasno3)&r*+rc&mynb3_b_o7q9wy+a67hcu=n%lcnpc@*7q7wx'
 
 # Google Generative AI API Key
-GOOGLE_API_KEY = "AIzaSyA_hlhql2v4u0omc_LHjGAQENZ2sHRUGJs"
+GOOGLE_API_KEY = "AIzaSyDFwcpqFH5wy_QRWs276HsW7zDninaXZqI"
 
-# Google Generative AI Model Name
-GEMINI_MODEL_NAME = "gemini-1.5-flash"
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
 ALLOWED_HOSTS = []
 
+# Authentication Backends
+AUTHENTICATION_BACKENDS = [
+    'extractor.backends.ApprovedUserBackend',
+]
 
 # Application definition
 
@@ -54,8 +56,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    "django.middleware.security.SecurityMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
 ]
 
 ROOT_URLCONF = 'appraisal_project.urls'
@@ -129,3 +129,7 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/login/'
+LOGIN_URL = '/login/'

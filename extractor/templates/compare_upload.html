@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Compare Appraisal PDFs{% endblock %}
+{% block title %}Update File Review{% endblock %}
 
 {% block content %}
 <style>
@@ -16,6 +16,13 @@
         background-color: #ffffff;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         text-align: center;
+    }
+
+    .header-logout {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        font-size: 0.9em;
     }
 
     #upload-form h2 {
@@ -107,8 +114,14 @@
     }
 </style>
 
-<form id="upload-form" method="post" enctype="multipart/form-data">
-    <h2>Compare Two Appraisal PDFs</h2>
+<div class="header-logout">
+    {% if user.is_authenticated %}
+        Welcome, {{ user.username }} | <a href="{% url 'logout' %}">Logout</a>
+    {% endif %}
+</div>
+
+<form id="upload-form" action="{% url 'compare_pdfs_process' %}" method="post" enctype="multipart/form-data">
+    <h2>Update File Review</h2>
     {% csrf_token %}
 
     <div class="file-upload-container">
@@ -127,7 +140,7 @@
 
     <div class="button-container">
         <!-- <a href="{% url 'upload_pdf' %}" class="btn btn-secondary">&larr; Back</a> -->
-        <button type="submit" class="btn">Compare Files</button>
+        <button type="submit" class="btn" style="flex-grow: 1;">Compare Files</button>
     </div>
 </form>
 

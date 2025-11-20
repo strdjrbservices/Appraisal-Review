@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+
+{% block title %}Escalation Check{% endblock %}
+
+{% block content %}
+<style>
+    #upload-form {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 3rem;
+        border-radius: 15px;
+        max-width: 550px;
+        margin: 30px auto;
+        background-color: #ffffff;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        text-align: center;
+    }
+
+    .header-logout {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        font-size: 0.9em;
+    }
+
+    #upload-form h2 {
+        margin-top: 0;
+        margin-bottom: 1.5rem;
+        color: #333;
+        font-weight: 600;
+    }
+
+    .file-upload-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+        width: 100%;
+    }
+    .file-drop-zone {
+        border: 2px dashed #d1d5db;
+        border-radius: 12px;
+        padding: 1.5rem; /* Adjusted padding */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        cursor: pointer;        
+        transition: border-color 0.3s, background-color 0.3s;
+        height: 120px; /* Set a fixed height */
+    }
+
+    .file-drop-zone:hover, .file-drop-zone.dragover {
+        background-color: #f9fafb;
+        border-color: #3b82f6;
+    }
+
+    .file-drop-zone .drop-zone-text {
+        color: #6b7280;
+        font-weight: 500;
+        margin: 0; /* Remove default margin */
+    }
+
+    .file-drop-zone .browse-link {
+        color: #3b82f6;
+        font-weight: 600;
+    }
+
+    input[type="file"] {
+        display: none;
+    }
+
+    /* Re-using button styles from other pages for consistency */
+    .btn {
+        border: none;
+        padding: 10px 25px;
+        cursor: pointer;
+        color: white;
+        border-radius: 8px;
+        font-size: 1em;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        transition: background-color 0.2s ease-in-out;
+        background-color: #007bff;
+    }
+    .btn:hover { background-color: #0056b3; }
+    .btn-secondary { background-color: #6c757d; }
+    .btn-secondary:hover { background-color: #5a6268; }
+
+    .button-container {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        width: 100%;
+        margin-top: 1.5rem;
+    }
+    .file-name {
+        color: #1f2937;
+        font-weight: 500;
+        margin-top: 1rem;
+        display: block;
+        font-size: 0.9em;
+        word-break: break-all;
+    }
+</style>
+
+<div class="header-logout">
+    {% if user.is_authenticated %}
+        Welcome, {{ user.username }} | <a href="{% url 'logout' %}">Logout</a>
+    {% endif %}
+</div>
+
+<form id="upload-form" action="{% url 'escalation_check_process' %}" method="post" enctype="multipart/form-data">
+    <h2>Escalation Check</h2>
+    <p style="margin-top:-1rem; margin-bottom: 2rem; color: #6b7280;">Upload an appraisal PDF and its corresponding Order Form to check for common escalation points. You can also provide optional documents for a more detailed review.</p>
+    {% csrf_token %}    
+    <div class="file-upload-container">
+        <div id="file-drop-zone-pdf" class="file-drop-zone required-zone">
+            <p class="drop-zone-text">Appraisal PDF (Required)<br>Drag & Drop or <span class="browse-link">browse</span></p>
+            <span id="file-name-pdf" class="file-name"></span>
+        </div>
+        <div id="file-drop-zone-html" class="file-drop-zone required-zone">
+            <p class="drop-zone-text">Order Form HTML (Required)<br>Drag & Drop or <span class="browse-link">browse</span></p>
+            <span id="file-name-html" class="file-name"></span>
+        </div>
+        <div id="file-drop-zone-purchase" class="file-drop-zone optional-zone">
+            <p class="drop-zone-text">Purchase Copy (Optional)<br>Drag & Drop or <span class="browse-link">browse</span></p>
+            <span id="file-name-purchase" class="file-name"></span>
+        </div>
+        <div id="file-drop-zone-engagement" class="file-drop-zone optional-zone">
+            <p class="drop-zone-text">Engagement Letter (Optional)<br>Drag & Drop or <span class="browse-link">browse</span></p>
+            <span id="file-name-engagement" class="file-name"></span>
+        </div>
+    </div>
+
+    <input id="pdf_file" type="file" name="pdf_file" accept="application/pdf" required>
+    <input id="html_file" type="file" name="html_file" accept=".html,.htm" required>
+    <input id="purchase_copy_file" type="file" name="purchase_copy_file" accept="application/pdf">
+    <input id="engagement_letter_file" type="file" name="engagement_letter_file" accept="application/pdf">
+
+    <div class="button-container">
+        <!-- <a href="{% url 'upload_pdf' %}" class="btn btn-secondary">&larr; Back</a> -->
+        <button type="submit" class="btn" style="flex-grow: 1;">Run Check</button>
+    </div>
+</form>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        function setupDragAndDrop(dropZoneId, fileInputId, fileNameId) {
+            const dropZone = document.getElementById(dropZoneId);
+            const fileInput = document.getElementById(fileInputId);
+            const fileNameDisplay = document.getElementById(fileNameId);
+            if (!dropZone || !fileInput || !fileNameDisplay) return;
+
+            dropZone.addEventListener('click', () => fileInput.click());
+            dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+            ['dragleave', 'dragend'].forEach(type => { dropZone.addEventListener(type, () => dropZone.classList.remove('dragover')); });
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                if (e.dataTransfer.files.length) {
+                    fileInput.files = e.dataTransfer.files;
+                    fileNameDisplay.textContent = fileInput.files[0].name;
+                }
+            });
+            fileInput.addEventListener('change', () => { if (fileInput.files.length) { fileNameDisplay.textContent = fileInput.files[0].name; } });
+        }
+        setupDragAndDrop('file-drop-zone-pdf', 'pdf_file', 'file-name-pdf');
+        setupDragAndDrop('file-drop-zone-html', 'html_file', 'file-name-html');
+        setupDragAndDrop('file-drop-zone-purchase', 'purchase_copy_file', 'file-name-purchase');
+        setupDragAndDrop('file-drop-zone-engagement', 'engagement_letter_file', 'file-name-engagement');
+    });
+</script>
+{% endblock %}

@@ -33,6 +33,16 @@
             display: flex;
             flex-direction: column;
         }
+        .sidebar-header {
+            padding-bottom: 1rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .sidebar-header p { margin: 0; }
+        .sidebar-header .username { font-weight: 600; }
+        .sidebar-header .logout-link {
+            font-size: 0.9em; color: var(--accent-color); text-decoration: none;
+        }
         .sidebar-footer {
             margin-top: 20px;
             display: flex;
@@ -213,10 +223,6 @@
         .editable-value:focus {
             outline: 2px solid var(--accent-color);
         }
-        .editable-value.changed-value {
-            background-color: #fff3cd; /* Light yellow for changed values */
-            border: 1px solid #ffeeba; /* Yellow border */
-        }
         .validate-button {
             padding: 10px 20px;
             background-color: var(--accent-color);
@@ -352,6 +358,19 @@
         .btn-submit:hover {
             background-color: #218838;
         }
+        .btn-finish {
+            background-color: #dc3545;
+            color: white;
+            margin-top: 1rem;
+            border: none;
+            cursor: pointer;
+            width: 100%;
+            padding: 12px;
+            font-size: 1rem;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
         .suggested-prompts {
             display: flex;
             flex-wrap: wrap;
@@ -406,20 +425,94 @@
         .common-prompt-btn-container:hover .common-prompt-details {
             display: block;
         }
+        /* New styles for Revision Helper */
+        .revision-helper-card {
+            background-color: #fffbeb; /* Light yellow background */
+            border: 1px solid #fde68a; /* Yellow border */
+            border-left: 4px solid #f59e0b; /* Amber-500 left border */
+            padding: 24px;
+            border-radius: 8px;
+            margin-top: 40px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .revision-helper-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+        .revision-helper-card h3 {
+            margin-top: 0;
+            color: #854d0e; /* Dark yellow text */
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 0; /* Remove bottom margin from h3 */
+        }
+        .toggle-revision-helper-btn {
+            background-color: transparent;
+            border: 1px solid #f59e0b;
+            color: #854d0e;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s, color 0.2s;
+        }
+        .toggle-revision-helper-btn:hover {
+            background-color: #fef3c7;
+        }
+        .revision-helper-card h3::before {
+            content: '📋'; /* Clipboard emoji */
+            font-size: 1.8rem;
+        }
+        .revision-helper-card p {
+            margin-top: 0;
+            color: #664d03;
+        }
+        .revision-helper-content {
+            display: none; /* Hidden by default */
+            margin-top: 16px;
+        }
+        .revision-helper-card.expanded .revision-helper-content {
+            display: block; /* Show when card has 'expanded' class */
+        }
+        .revision-helper-list {
+            list-style-type: none;
+            padding-left: 0;
+            margin-top: 20px;
+            columns: 2;
+            column-gap: 30px;
+        }
+        .revision-helper-list li {
+            padding: 8px 0;
+            color: #854d0e;
+            font-weight: 500;
+            border-bottom: 1px solid #fde68a;
+        }
     </style>
 </head>
 <body>
     {% load dict_helpers %}
     <div class="sidebar">
-
-        <h3>Sections</h3>
+        <div class="sidebar-header">
+            {% if user.is_authenticated %}
+                <p class="username">Welcome, {{ user.username }}</p>
+                <a href="{% url 'logout' %}" class="logout-link">Logout</a>
+            {% endif %}
+        </div>
+        
+        <h3 style="margin-top:0;">Sections</h3>
         <ul>
-            {% for key, display_name in sections.items %}
+            {% for key, display_name in sections.items %} 
+                {% if key != 'additional_comments' %}
                 <li>
                     <a href="{% url 'extract_section' filename=filename section_name=key %}" class="section-link {% if key == section_key %}active{% endif %}">
                         {{ display_name }}
                     </a>
                 </li>
+                {% endif %}
             {% endfor %}
         </ul>
         <div class="sidebar-footer">
@@ -441,10 +534,51 @@
             <button id="validate-btn" class="validate-button">Validate</button>
         </div>
         <div id="validation-container"></div>
+        
+        {% comment %} Display backend validation messages if they exist {% endcomment %}
+        {% if data.backend_validation %}
+            <div class="validation-message validation-{{ data.backend_validation.status }}">
+                <strong>Backend Validation:</strong> {{ data.backend_validation.message }}
+            </div>
+        {% endif %}
+
+        {% comment %} Display ADU validation messages if they exist {% endcomment %}
+        {% if data.adu_validation %}
+            {% with status_lower=data.adu_validation.status|lower %}
+            <div class="validation-message validation-{% if 'fail' in status_lower %}error{% elif 'pass' in status_lower %}success{% else %}warning{% endif %}">
+                <strong>ADU Validation:</strong> {{ data.adu_validation.message }}
+            </div>
+            {% endwith %}
+        {% endif %}
 
         {% if data.error %}
             <p class="error">Error: {{ data.error }}</p>
         {% elif section_key == 'sales_grid' %}
+            {% if show_revision_helper %}
+                <div class="revision-helper-card">
+                    <div class="revision-helper-header">
+                        <h3>Sales Grid Section Revision Helper</h3>
+                        <button class="toggle-revision-helper-btn">Show</button>
+                    </div>
+                    <div class="revision-helper-content">
+                        <p>Use this checklist to verify common revision requests for the <strong>Sales Comparison Approach</strong> grid.</p>
+                        <ul class="revision-helper-list">
+                            <li>Verify sales grid header data (counts, price ranges) is complete and correctly formatted.</li>
+                            <li>Ensure at least 3 closed sales are used for the primary comps (not listings).</li>
+                            <li>Verify comp data integrity: sale dates are logical (not future, not after effective date), verification sources are noted, proximity is filled.</li>
+                            <li>Check for appropriate comp selection (e.g., leasehold comps for a leasehold subject, reasonable proximity).</li>
+                            <li>Ensure Subject data (age, GLA, rooms, garage, amenities) is consistent with other sections (Improvements, Sketch, Page 1).</li>
+                            <li>Verify ADU details are on a separate line item, not combined with the main unit's GLA/room counts.</li>
+                            <li>Check for logical adjustment direction (e.g., superior features get negative adjustments).</li>
+                            <li>Verify adjustment amounts are consistent for similar features across all comps (e.g., GLA, baths, condition).</li>
+                            <li>Ensure adjustments are explained if not obvious (e.g., for View, Location, or Condition).</li>
+                            <li>Verify the 'Indicated Value' is bracketed by the adjusted sale prices of the comparables.</li>
+                            <li>Ensure the 'Indicated Value' in the grid matches the final value in the Reconciliation section.</li>
+                            <li>Check for data entry errors in grid line items (e.g., a date in the 'Pool' field).</li>
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
             <table>
                 <thead>
                     <tr>
@@ -475,6 +609,276 @@
                             <strong>{{ data|get_item:"Indicated Value by Sales Comparison Approach"|default_if_none:"" }}</strong>
                         </td>
                     </tr>
+                </tbody>
+            </table>
+        {% elif section_key == 'subject' %}
+            {% if show_revision_helper %}
+                <div class="revision-helper-card">
+                    <div class="revision-helper-header">
+                        <h3>Subject Section Revision Helper</h3>
+                        <button class="toggle-revision-helper-btn">Show</button>
+                    </div>
+                    {% if is_fha_case %}
+                        <div class="revision-helper-content">
+                            <p>Use this checklist to verify common revision requests for an <strong>FHA Subject</strong> section.</p>
+                            <ul class="revision-helper-list">
+                                <li>Please include the FHA case# on all pages of the report.</li>
+                                <li>Per photos the subject has repairs however the report made As-is. Please state whether the subject meets FHA 4000.1 handbook guidelines or not. If not, please revise to subject-to repair.</li>
+                                <li>Please comment in the addendum that the intended user of the report is FHA/HUD.</li>
+                                <li>Please state whether the subject meets FHA 4000.1 handbook guidelines or not.</li>
+                                <li>Please comment if the attic was inspected.</li>
+                                <li>Please comment if the crawlspace was inspected.</li>
+                                <li>Please label the porch/patio/deck on sketch per the FHA requirement.</li>
+                                <li>Comments indicate the report should be made subject to repairs. Please revise accordingly.</li>
+                                <li>Please address if well and septic distances meet HUD guidelines.</li>
+                            </ul>
+                        </div>
+                    {% endif %}
+                    <div class="revision-helper-content">
+                        <p>Use this checklist to verify common revision requests for the <strong>Subject</strong> section.</p>
+                        <ul class="revision-helper-list">
+                            <li>Mark that the subject is offered for sale.</li>
+                            <li>Add the borrower's middle initial (M).</li>
+                            <li>Update unit number in the subject’s address (e.g., Unit 123D).</li>
+                            <li>Revise street name to "River Bend" (two words).</li>
+                            <li>Revise street suffix from Cir to Dr.</li>
+                            <li>Complete lender name (e.g., "aura capital funding mangement LLC").</li>
+                            <li>Add street suffix ‘Dr’ in the lender address.</li>
+                            <li>Revise property address to match order form (e.g., 3437-3439 Viking St).</li>
+                            <li>Add ‘Inc’ at the end of the lender/client name (e.g., OCMBC Inc.).</li>
+                            <li>Revise the borrower's last name (e.g., ‘Arnett’).</li>
+                            <li>Revise the spelling of the lender's city (e.g., Tucson).</li>
+                            <li>Revise the state in the lender's address (e.g., PA).</li>
+                            <li>Remove ‘Inc’ from lender/client name (e.g., The Loan Store, JMAC Lending).</li>
+                            <li>Add ‘W’ direction in the subject property address.</li>
+                            <li>Revise lender/client address city name to match the order form.</li>
+                            <li>Revise borrower name to match the order form.</li>
+                            <li>Revise the spelling of the borrower’s first name.</li>
+                            <li>Ensure ‘Legal Description’ is noted in the report.</li>
+                            <li>If Legal Description is "see addendum", verify it's in the addendum.</li>
+                            <li>Ensure ‘Assessor's Parcel #’ is noted.</li>
+                            <li>Revise borrower name to a single name (e.g., Adam Gleve).</li>
+                            <li>Ensure ‘Neighborhood Name’ is noted.</li>
+                            <li>Verify occupancy if photos suggest vacant/occupied mismatch.</li>
+                            <li>If Zoning is PUD, ensure PUD box is checked.</li>
+                            <li>If PUD, ensure PUD Information section is complete.</li>
+                            <li>If PUD/HOA amount is noted, ensure ‘per year/month’ is marked.</li>
+                            <li>Uncheck the PUD box if not a PUD.</li>
+                            <li>If PUD box is marked, verify HOA amount is not 0.</li>
+                            <li>If not PUD, ensure PUD Information section is not completed.</li>
+                            <li>Remove ‘Trust’ from lender/client name (e.g., BPL Mortgage, LLC).</li>
+                            <li>Ensure ‘Property Rights Appraised’ is marked.</li>
+                            <li>Revise lender/client name to match order form (e.g., NQM Funding, LLC).</li>
+                            <li>Ensure owner of public record is included on page 1.</li>
+                            <li>Revise suite number in the lender/client address (e.g., Suite 400).</li>
+                            <li>Ensure offering price is noted if offered for sale.</li>
+                            <li>Refer to attached legal description if applicable.</li>
+                            <li>Ensure 'offered for sale' checkbox is appropriately marked.</li>
+                            <li>For investment property, revise occupancy to tenant or vacant.</li>
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key, value in data.items %}
+                        <tr>
+                            <td>{{ key }}</td>
+                            <td contenteditable="true" class="editable-value" data-field-name="{{ key }}">{{ value|default_if_none:"" }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% elif section_key == 'contract' %}
+            {% if show_revision_helper %}
+                <div class="revision-helper-card">
+                    <div class="revision-helper-header">
+                        <h3>Contract Section Revision Helper</h3>
+                        <button class="toggle-revision-helper-btn">Show</button>
+                    </div>
+                    <div class="revision-helper-content">
+                        <p>Use this checklist to verify common revision requests for the <strong>Contract</strong> section.</p>
+                        <ul class="revision-helper-list">
+                            <li>Verify 'Contract Price' matches the purchase agreement.</li>
+                            <li>Verify 'Date of Contract' matches the purchase agreement.</li>
+                            <li>If 'Financial Assistance' is YES, ensure the concession amount is not 0.</li>
+                            <li>Verify the concession amount matches the purchase agreement.</li>
+                            <li>Ensure transaction type (arm's length or non-arm's length) is provided.</li>
+                            <li>If a purchase, ensure 'did' analyze contract is checked.</li>
+                            <li>If a purchase, ensure all fields are completed.</li>
+                            <li>If a refinance, ensure the entire section is blank.</li>
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key, value in data.items %}
+                        {% include 'key_value_row.html' with key=key value=value %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% elif section_key == 'neighborhood' %}
+            {% if show_revision_helper %}
+                <div class="revision-helper-card">
+                    <div class="revision-helper-header">
+                        <h3>Neighborhood Section Revision Helper</h3>
+                        <button class="toggle-revision-helper-btn">Show</button>
+                    </div>
+                    <div class="revision-helper-content">
+                        <p>Use this checklist to verify common revision requests for the <strong>Neighborhood</strong> section.</p>
+                        <ul class="revision-helper-list">
+                            <li>Verify predominant price is between Low/High range for 'One-Unit Housing'.</li>
+                            <li>Verify Low/High price range is not interchanged for 'One-Unit Housing'.</li>
+                            <li>Verify predominant age is between Low/High range for 'One-Unit Housing'.</li>
+                            <li>Ensure Low, High, and Predominant values are noted for 'One-Unit Housing'.</li>
+                            <li>Ensure 'Neighborhood Boundaries' are provided for all directions (North, South, East, West).</li>
+                            <li>Verify 'Present Land Use' percentages sum to 100%.</li>
+                            <li>If 'Other' land use has a percentage, ensure a comment is provided.</li>
+                            <li>If appraised value is >10% higher than predominant value, check for over-improvement comments.</li>
+                            <li>If appraised value is >10% lower than predominant value, check for under-improvement comments.</li>
+                            <li>Check for subjective/forbidden words in 'Neighborhood Description' (e.g., "average condition").</li>
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key, value in data.items %}
+                        {% include 'key_value_row.html' with key=key value=value %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% elif section_key == 'site' %}
+            {% if show_revision_helper %}
+                <div class="revision-helper-card">
+                    <div class="revision-helper-header">
+                        <h3>Site Section Revision Helper</h3>
+                        <button class="toggle-revision-helper-btn">Show</button>
+                    </div>
+                    <div class="revision-helper-content">
+                        <p>Use this checklist to verify common revision requests for the <strong>Site</strong> section.</p>
+                        <ul class="revision-helper-list">
+                            <li>Ensure 'Site Area' unit is specified (e.g., 'sf' or 'ac').</li>
+                            <li>If 'Zoning Compliance' is 'Legal Nonconforming' or 'No Zoning', check for comments on rebuild rights.</li>
+                            <li>If 'Zoning Compliance' is 'Illegal', check for a detailed explanation.</li>
+                            <li>If 'Highest and Best Use' is 'No', ensure a description is provided.</li>
+                            <li>If photos show an alley, verify the 'Alley' box is marked.</li>
+                            <li>If 'Sanitary Sewer' is 'Septic', check for comments on whether it's typical for the area.</li>
+                            <li>If both 'Well' and 'Septic' are present, check for comments on HUD distance requirements.</li>
+                            <li>Verify 'Sanitary Sewer' value is consistent (e.g., not marked 'Public' if comments say 'Septic').</li>
+                            <li>Verify 'FEMA Special Flood Hazard Area' and 'FEMA Flood Zone' are consistent (e.g., 'No' with 'X', 'Yes' with 'A'/'AE').</li>
+                            <li>Ensure 'Adverse Site Conditions' checkbox matches the corresponding comments.</li>
+                            <li>Verify 'Utilities typical for market area' checkbox is marked.</li>
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key, value in data.items %}
+                        {% include 'key_value_row.html' with key=key value=value %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% elif section_key == 'improvements' %}
+            {% if show_revision_helper %}
+                <div class="revision-helper-card">
+                    <div class="revision-helper-header">
+                        <h3>Improvements Section Revision Helper</h3>
+                        <button class="toggle-revision-helper-btn">Show</button>
+                    </div>
+                    <div class="revision-helper-content">
+                        <p>Use this checklist to verify common revision requests for the <strong>Improvements</strong> section.</p>
+                        <ul class="revision-helper-list">
+                            <li>Verify 'One w/ Accessory Unit' (ADU) checkbox matches photos, sketch, and ADU qualifications (e.g., kitchen).</li>
+                            <li>Ensure 'Design (Style)' is consistent between Improvements and Sales Grid.</li>
+                            <li>Verify 'Existing/Proposed/Under Const.' status matches photos and report context.</li>
+                            <li>Ensure all 'Material/Condition' fields (Walls, Roof, etc.) are fully completed.</li>
+                            <li>If photos show an attic/crawl space, verify the corresponding box is marked.</li>
+                            <li>Ensure 'Heating/Cooling' details are consistent between Improvements and Sales Grid.</li>
+                            <li>Verify 'Gross Living Area' (GLA) is a whole number and consistent with the sketch.</li>
+                            <li>Verify 'Garage' type (Att./Det.) and count are consistent with photos and sketch.</li>
+                            <li>Ensure amenity checkboxes (e.g., 'Porch', 'Pool') are not marked if the description is 'None'.</li>
+                            <li>Verify 'Physical Deficiencies' checkbox matches the corresponding comments.</li>
+                            <li>Ensure all bedroom and bathroom photos are provided and not duplicated.</li>
+                            <li>Verify the building sketch is present and labels (e.g., bath labels) are correct.</li>
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key, value in data.items %}
+                        {% include 'key_value_row.html' with key=key value=value %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% elif section_key == 'reconciliation' %}
+            {% if show_revision_helper %}
+                <div class="revision-helper-card">
+                    <div class="revision-helper-header">
+                        <h3>Reconciliation Section Revision Helper</h3>
+                        <button class="toggle-revision-helper-btn">Show</button>
+                    </div>
+                    <div class="revision-helper-content">
+                        <p>Use this checklist to verify common revision requests for the <strong>Reconciliation</strong> section.</p>
+                        <ul class="revision-helper-list">
+                            <li>Verify the final 'Opinion of Market Value' matches the 'Indicated Value by Sales Comparison Approach'.</li>
+                            <li>Ensure the 'Effective Date of Value' is correct and matches the inspection date.</li>
+                            <li>If the report is 'subject to', verify the correct condition is checked (e.g., 'completion per plans', 'repairs', 'inspection').</li>
+                            <li>If 'subject to', ensure a clear explanation and/or cost-to-cure is provided for the conditions.</li>
+                            <li>If the report is 'as is', confirm there are no required repairs or health/safety issues noted elsewhere.</li>
+                            <li>If Cost or Income approaches were developed, ensure their indicated values are present.</li>
+                            <li>Confirm the final 'Opinion of Market Value' is bracketed by the adjusted sales prices of the comparables.</li>
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key, value in data.items %}
+                        <tr>
+                            <td>{{ key }}</td>
+                            <td contenteditable="true" class="editable-value" data-field-name="{{ key }}">{{ value|default_if_none:"" }}</td>
+                        </tr>
+                    {% endfor %}
                 </tbody>
             </table>
         {% elif section_key == 'sales_grid_adjustment' %}
@@ -526,6 +930,20 @@ Also please confirm subject street, front and rear photo are present and no dupl
 
 Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)</button>
                             <button type="button" class="prompt-suggestion-btn" data-prompt="Verify all Photo labels and no duplicate photos">Verify Photo Lables</button>
+                            <button type="button" class="prompt-suggestion-btn" data-prompt="Check  'One with Accessory Unit' is selected in IMPROVEMENTS section, the following criteria must be met:
+
+1.  This box should be checked if there is an additional dwelling with both a kitchen (containing a stove) and a bath.
+    *   If there is interior access, the ADU may be included in the main unit's details.
+    *   If there is no interior access, the ADU must be listed as a separate line item.
+    *   If the ADU is considered a second floor, it may be included in the main unit's details.
+
+2.  If the additional dwelling lacks either a kitchen or a bath, 'One with Accessory Unit' must be unchecked.
+
+3.  If a basement contains a kitchen and bath, 'One with Accessory Unit' can be checked or unchecked.
+
+4.  A room labeled 'kitchenette' should not have a stove; in this case, no health and safety comment is needed. However, if a kitchenette does contain a stove, escalate with a comment (permitted/health or safety).
+
+    Escalation language: On page #, a room labeled as 'kitchenette' has a stove. Please advise.">ADU Criteria Check</button>
                             <div class="common-prompt-btn-container"> 
                                 <button type="button" class="prompt-suggestion-btn" data-prompt="Please check and verify if below revision requests are addressed in the file.&#10;&#10;The date lease begins of rental comp# 3 is noted as Owner, please revise&#10;&#10;If addressed by comments, please verify if particular section is updated.&#10;&#10;If addressed, provide answer as revision and state corrected or not corrected. Keep it short.&#10;&#10;Below are extra points to confirm, don't address or treat as revision, just verify&#10;&#10;Also, please check if any checkboxes, or field are blank, if yes highlight in short&#10;&#10;consider below,&#10;&#10;if assignment type is refinance, then contract section should be blank, even checkboxes.&#10;&#10;If purchase, the appropriate field and checkboxes should be marked.&#10;&#10;In garage, check and validate according to checkboxes marked. &#10;&#10;Check if appraised value is matched at in total 4 locations.&#10;&#10;The signature date should be greater than effective date. Effective date is as of date.&#10;&#10;In signature page Company Name/AMC Name should include Fastapp&#10;&#10;Check for prior services, exposure comment, check is appraiser invoice is attached if yes need to remove.&#10;&#10;Please answer 1 per line not in paragraph">
                                     Common Prompt
@@ -548,6 +966,7 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                             {% csrf_token %}
                             <textarea name="custom_prompt" placeholder="e.g., 'Check for any discrepancies in the Gross Living Area (GLA) across all sections of the report.'">{{ custom_prompt|default_if_none:"" }}</textarea>
                             <button type="submit" class="btn-submit">Run Custom Analysis</button>
+                            <button type="button" id="finish-review-btn" class="btn-finish">Finish Review</button>
                         </form>
                     </div>
                 </div>
@@ -598,6 +1017,23 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                 </div>
             </div>
         {% elif section_key == 'sale_history' %}
+            {% if show_revision_helper %}
+                <div class="revision-helper-card">
+                    <div class="revision-helper-header">
+                        <h3>Sale History Section Revision Helper</h3>
+                        <button class="toggle-revision-helper-btn">Show</button>
+                    </div>
+                    <div class="revision-helper-content">
+                        <p>Use this checklist to verify common revision requests for the <strong>Sale History</strong> section.</p>
+                        <ul class="revision-helper-list">
+                            <li>Please check that your research "Did" reveal a prior sale, as Comp 3 sold within a year.</li>
+                            <li>Please check that your research "Did Not" reveal any prior sales for the comparables.</li>
+                            <li>Please check that your research "Did" reveal a prior sale, as the Subject sold within 3 years.</li>
+                            <li>Please check that your research "Did Not" reveal a prior sale, as the Subject has not sold within 3 years.</li>
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
             <h3>Prior Sale History Grid</h3>
             {% if data.subject and data.comparables %}
                 <table>
@@ -625,7 +1061,6 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                     </tbody>
                 </table>
             {% endif %}
-
             <h3 style="margin-top: 40px;">Research and Analysis</h3>
             <table>
                 <tbody>
@@ -640,6 +1075,39 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                 </tbody>
             </table>
         {% elif section_key == 'rental_grid' %}
+            {% if show_revision_helper %}
+                <div class="revision-helper-card">
+                    <div class="revision-helper-header">
+                        <h3>Rental Grid Section Revision Helper</h3>
+                        <button class="toggle-revision-helper-btn">Show</button>
+                    </div>
+                    <div class="revision-helper-content">
+                        <p>Use this checklist to verify common revision requests for the <strong>Rental Grid (1007)</strong> section.</p>
+                        <ul class="revision-helper-list">
+                            <li>Please have the 1007 form included in the report.</li>
+                            <li>Revise subject's lease dates per the lease agreement on the 1007 form.</li>
+                            <li>Provide all rental comps photos in the report.</li>
+                            <li>Include the rental comparables on the location map.</li>
+                            <li>The occupancy is marked as owner; however, the 1007 form says vacant. Please verify.</li>
+                            <li>Revise ‘Date Lease Expires’ for rental comp as it is prior to or the same as its ‘Date Lease Begins’.</li>
+                            <li>The opinion of market rent is not bracketed by the adjusted rent price of rental comps, please revise.</li>
+                            <li>Please have the opinion of market rent noted on the 1007 form.</li>
+                            <li>Please review the GLA adjustments made on 1007 form as they appear excessive.</li>
+                            <li>Please have the ‘Date Lease Begins’ and ‘Date Lease Expires’ noted for all rental comps.</li>
+                            <li>The occupancy is marked as Owner; however, the photos indicate it is vacant, and the 1007 form shows it is currently rented. Please verify/revise.</li>
+                            <li>Please attach the 1007 to the original report and upload. The 1007 does not need to be separately uploaded.</li>
+                            <li>Please have the 'Proximity to Subject' noted for all rental comps on the 1007 form.</li>
+                            <li>Client requires a minimum of 3 closed rentals to develop market rent. Please provide additional rental comps.</li>
+                            <li>The subject cannot be used as a rental comp. Please find an alternate comp.</li>
+                            <li>Rental comps appear to be long-term rentals; however, their lease date is noted as “Per Night.” Please revise.</li>
+                            <li>Market rent is significantly different from the current rent. Please advise.</li>
+                            <li>The subject is in rent control; however, all comps used are not. Please provide a similar comp or comment.</li>
+                            <li>Rental comps lease dates reflect 'Active Listing'. Please utilize a minimum of 3 closed rentals.</li>
+                            <li>For rent schedule, if the order was for short-term rentals, please utilize short-term rentals to develop market rent.</li>
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
             <table>
                 <thead>
                     <tr>
@@ -704,11 +1172,6 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                     {% endfor %}
                 </tbody>
             </table>
-            <form action="{% url 'extract_section' filename=filename section_name='custom_analysis' %}" method="post" id="custom-analysis-form">
-            {% csrf_token %}
-            <textarea name="custom_prompt" placeholder="e.g., 'Check for any discrepancies in the Gross Living Area (GLA) across all sections of the report.'"></textarea></br>
-            <button type="submit" class="section-button btn-submit">Run Custom Analysis</button>
-            </form>
         {% elif section_key == 'market_conditions' %}
             <h3>Market Conditions Analysis Grid</h3>
             <table>
@@ -789,7 +1252,48 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                     {% endfor %}
                 </tbody>
             </table>
+        {% elif section_key == 'client_lender_requirements' %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Client Requirement Check</th>
+                        <th>Finding</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key, value in data.items %}
+                        {% if 'N/A - Rule does not apply' not in value %}
+                            {% with value_lower=value|lower %}
+                            <tr class="consistency-check {% if 'fail' in value_lower or 'mismatch' in value_lower %}consistency-mismatch{% else %}consistency-success{% endif %}">
+                                <td class="check-title">{{ key }}</td>
+                                <td class="check-details editable-value" contenteditable="true" data-field-name="{{ key }} - Finding">{{ value|default_if_none:"" }}</td>
+                            </tr>
+                            {% endwith %}
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
         {% elif section_key == 'cost_approach' %}
+            {% if show_revision_helper %}
+                <div class="revision-helper-card">
+                    <div class="revision-helper-header">
+                        <h3>Cost Approach Section Revision Helper</h3>
+                        <button class="toggle-revision-helper-btn">Show</button>
+                    </div>
+                    <div class="revision-helper-content">
+                        <p>Use this checklist to verify common revision requests for the <strong>Cost Approach</strong> section.</p>
+                        <ul class="revision-helper-list">
+                            <li>Please include the ‘OPINION OF SITE VALUE’ in the report.</li>
+                            <li>Please include the ‘Estimated Remaining Economic Life’ in the report.</li>
+                            <li>Please revise the conflicting comment noted on page# 4 which reads “Estimated remaining economic life: 59 Years.” However the same section also comment noted as ‘remaining economic life of 60 years’</li>
+                            <li>Please develop the cost approach section of the report per client requirement.</li>
+                            <li>1004C: Fannie Mae requires appraisers to complete the cost approach for all manufactured homes. Please include the cost approach.</li>
+                            <li>Please have the appropriate checkbox marked in the cost approach section. (i.e. REPRODUCTION OR REPLACEMENT COST NEW)</li>
+                            <li>For BPL only: This client requires the Cost Approach to be completed. Even if this approach is not weighted in determining value, it must be completed.</li>
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
             <table>
                 <thead>
                     <tr>
@@ -879,33 +1383,6 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
             const links = document.querySelectorAll('.section-link');
             const loadingOverlay = document.getElementById('loading-overlay');
 
-            // --- Revision Functionality ---
-            const editableCells = document.querySelectorAll('.editable-value');
-
-            editableCells.forEach(cell => {
-                // Store original value
-                // Use innerHTML to preserve any formatting like <strong> if present, but trim whitespace
-                cell.dataset.originalValue = cell.innerHTML.trim();
-                // Add title for easy comparison on hover
-                cell.title = `Original: ${cell.dataset.originalValue.replace(/<[^>]*>/g, '')}`; // Remove HTML tags for title
-
-                cell.addEventListener('input', function() {
-                    const currentValue = this.innerHTML.trim(); // Use innerHTML for comparison
-                    const originalValue = this.dataset.originalValue;
-
-                    if (currentValue !== originalValue) {
-                        this.classList.add('changed-value');
-                        // Update title to show current vs original (removing HTML tags for readability)
-                        this.title = `Original: ${originalValue.replace(/<[^>]*>/g, '')}\nCurrent: ${currentValue.replace(/<[^>]*>/g, '')}`;
-                    } else {
-                        this.classList.remove('changed-value');
-                        // Reset title to just original
-                        this.title = `Original: ${originalValue.replace(/<[^>]*>/g, '')}`;
-                    }
-                });
-            });
-            // --- End Revision Functionality ---
-
             links.forEach(link => {
                 link.addEventListener('click', function() {
                     // Show the loading spinner when a section link is clicked
@@ -921,6 +1398,18 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                 const tableRows = document.querySelectorAll('tbody tr');
 
                 {% if section_key == 'subject' %}
+                // Hide FHA field if it's blank
+                tableRows.forEach(row => {
+                    const fieldCell = row.querySelector('td:first-child');
+                    if (fieldCell && fieldCell.textContent.trim() === 'FHA') {
+                        const valueCell = row.querySelector('td:last-child');
+                        const fhaValue = valueCell.textContent.trim();
+                        if (!fhaValue || fhaValue === '--' || fhaValue === 'null') {
+                            row.style.display = 'none';
+                        }
+                    }
+                });
+
                 // Validation for "Purchase Transaction" requiring "Contract" section
                 let assignmentType = null;
                 // Clear the session storage flag initially on subject page load
@@ -929,6 +1418,14 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                 sessionStorage.removeItem('isPUD');
                 sessionStorage.removeItem('subjectLenderClient');
                 sessionStorage.removeItem('isRefinanceTransaction');
+                sessionStorage.removeItem('subjectFullAddress');
+                // Clear state-specific flags
+                sessionStorage.removeItem('subjectState');
+
+                const getFieldValue = (fieldName) => {
+                    const row = Array.from(tableRows).find(r => r.querySelector('td:first-child')?.textContent.trim() === fieldName);
+                    return row ? row.querySelector('td:last-child')?.textContent.trim() : null;
+                };
 
                 tableRows.forEach(row => {
                     const fieldCell = row.querySelector('td:first-child');
@@ -944,7 +1441,19 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                             sessionStorage.setItem('subjectLenderClient', lenderClientName);
                         }
                     }
+                    // Capture State for state-specific validations
+                    if (fieldCell && fieldCell.textContent.trim() === 'State') {
+                        const state = valueCell.textContent.trim().toUpperCase();
+                        if (state) sessionStorage.setItem('subjectState', state);
+                    }
                 });
+                
+                // Capture Lender/Client Address for cross-validation
+                const lenderAddress = getFieldValue('Address (Lender/Client)');
+                if (lenderAddress && lenderAddress !== '--' && lenderAddress !== 'null') {
+                    sessionStorage.setItem('subjectLenderAddress', lenderAddress);
+                }
+
 
                 if (assignmentType === 'Purchase Transaction') {
                     // Set a flag in session storage to be used by the 'Contract' section validation
@@ -953,6 +1462,18 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                     const messageDiv = document.createElement('div');
                     messageDiv.classList.add('validation-message', 'validation-warning');
                     messageDiv.textContent = "⚠️ Warning: Assignment Type is 'Purchase Transaction'. Please ensure the 'Contract' section is filled out as required.";
+                    
+                    // Create a link to the 'Contract' section
+                    const contractLink = document.createElement('a');
+                    contractLink.href = `{% url 'extract_section' filename=filename section_name='contract' %}`;
+                    contractLink.textContent = "Contract section";
+                    contractLink.onclick = function() {
+                        document.getElementById('loading-overlay').style.display = 'flex';
+                    };
+
+                    messageDiv.innerHTML = "⚠️ Warning: Assignment Type is 'Purchase Transaction'. Please ensure the ";
+                    messageDiv.appendChild(contractLink);
+                    messageDiv.innerHTML += " is filled out as required.";
                     validationContainer.appendChild(messageDiv);
                 } else if (assignmentType === 'Refinance Transaction') {
                     // Set a flag for refinance transactions
@@ -960,7 +1481,17 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
 
                     const messageDiv = document.createElement('div');
                     messageDiv.classList.add('validation-message', 'validation-warning');
-                    messageDiv.textContent = "ℹ️ Info: Assignment Type is 'Refinance Transaction'. The 'Contract' section should be blank.";
+                    
+                    const contractLink = document.createElement('a');
+                    contractLink.href = `{% url 'extract_section' filename=filename section_name='contract' %}`;
+                    contractLink.textContent = "Contract section";
+                    contractLink.onclick = function() {
+                        document.getElementById('loading-overlay').style.display = 'flex';
+                    };
+
+                    messageDiv.innerHTML = "ℹ️ Info: Assignment Type is 'Refinance Transaction'. The ";
+                    messageDiv.appendChild(contractLink);
+                    messageDiv.innerHTML += " should be blank.";
                     validationContainer.appendChild(messageDiv);
                 }
 
@@ -990,6 +1521,7 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
 
                 if (allAddressFieldsPresent) {
                     const fullAddress = `${addressValues['Property Address']}, ${addressValues['City']}, ${addressValues['State']} ${addressValues['Zip Code']}`;
+                    sessionStorage.setItem('subjectFullAddress', fullAddress);
                     const messageDiv = document.createElement('div');
                     messageDiv.classList.add('validation-message', 'validation-warning');
                     messageDiv.textContent = `ℹ️ Consistency Check: Please verify that the address "${fullAddress}" matches the address shown in the Sales Grid, Location Map, Aerial Map, and on Subject Photos.`;
@@ -1111,11 +1643,85 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                     validationContainer.appendChild(messageDiv);
                 }
                 
-                // Info message for Lender/Client validation
-                if (sessionStorage.getItem('subjectLenderClient')) {
+                // // Info message for Lender/Client validation
+                // if (sessionStorage.getItem('subjectLenderClient')) {
+                //     const messageDiv = document.createElement('div');
+                //     messageDiv.classList.add('validation-message', 'validation-warning');
+                //     messageDiv.textContent = `ℹ️ Info: The Lender/Client name will be cross-referenced with the 'Certification' section for consistency.`;
+                //     validationContainer.appendChild(messageDiv);
+                // }
+
+                // FHA Validation
+                const fhaValue = getFieldValue('FHA');
+                if (fhaValue && fhaValue !== '--' && fhaValue !== 'null') {
+                    sessionStorage.setItem('isFhaCase', 'true');
                     const messageDiv = document.createElement('div');
                     messageDiv.classList.add('validation-message', 'validation-warning');
-                    messageDiv.textContent = `ℹ️ Info: The Lender/Client name will be cross-referenced with the 'Certification' section for consistency.`;
+                    
+                    // Create a link to the custom analysis section that carries the FHA flag
+                    const customAnalysisLink = document.createElement('a');
+                    // Append ?fha=true to the URL
+                    customAnalysisLink.href = `{% url 'extract_section' filename=filename section_name='custom_analysis' %}?fha=true`;
+                    customAnalysisLink.textContent = 'Custom Analysis section';
+                    customAnalysisLink.onclick = function() {
+                        document.getElementById('loading-overlay').style.display = 'flex';
+                    };
+
+                    messageDiv.innerHTML = "ℹ️ FHA case detected. Please check FHA instructions in the ";
+                    messageDiv.appendChild(customAnalysisLink);
+                    messageDiv.innerHTML += ".";
+                    
+                    validationContainer.appendChild(messageDiv);
+                }
+
+                // --- New Rental Form (1007) Detection ---
+                {% if is_rental_form %}
+                const rentalMessageDiv = document.createElement('div');
+                rentalMessageDiv.classList.add('validation-message', 'validation-warning');
+
+                // Create a link to the custom analysis section
+                const rentalCustomAnalysisLink = document.createElement('a');
+                rentalCustomAnalysisLink.href = `{% url 'extract_section' filename=filename section_name='custom_analysis' %}`;
+                rentalCustomAnalysisLink.textContent = 'Custom Analysis section';
+                rentalCustomAnalysisLink.onclick = function() {
+                    document.getElementById('loading-overlay').style.display = 'flex';
+                };
+
+                rentalMessageDiv.innerHTML = "ℹ️ Rental form detected. Please check rental form instructions in the ";
+                rentalMessageDiv.appendChild(rentalCustomAnalysisLink);
+                rentalMessageDiv.innerHTML += ".";
+                validationContainer.appendChild(rentalMessageDiv);
+                {% endif %}
+                // --- New "Unpaid OK" Lender Validation ---
+                const unpaidOkLenders = [
+                    'prmg', 'paramount residential mortgage group',
+                    'cardinal financial company',
+                    'ice lender holdings llc',
+                    'np inc', 'nqm funding, llc',
+                    'east coast capital',
+                    'guaranteed rate. inc',
+                    'commercial lender, llc',
+                    'direct lending partners',
+                    'civic',
+                    'cv3',
+                    'united faith mortgage',
+                    'arixa capital', 'crosswind financial', 'western alliance bank',
+                    'rcn capital, llc',
+                    'aura mortgage advisors, llc', 'blue hub capital',
+                    'nations direct mortgage llc',
+                    'sierra pacific mortgage company inc',
+                    'champions funding llc'
+                ];
+                const lenderClient = getFieldValue('Lender/Client')?.toLowerCase() || '';
+                const loanNumber = getFieldValue('Loan Number') || '';
+
+                const isUnpaidOkLender = unpaidOkLenders.some(lender => lenderClient.includes(lender));
+                const isLoanDepotSpecialCase = lenderClient.includes('loandepot.com') && (loanNumber.startsWith('1') || loanNumber.startsWith('4'));
+
+                if (isUnpaidOkLender || isLoanDepotSpecialCase) {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message', 'validation-success');
+                    messageDiv.textContent = `✅ Unpaid OK lender`;
                     validationContainer.appendChild(messageDiv);
                 }
                 {% endif %}
@@ -1592,7 +2198,6 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                                 const messageDiv = document.createElement('div');
                                 messageDiv.classList.add('validation-message', 'validation-error');
                                 messageDiv.textContent = `⚠️ Validation warning: '${fieldName}' is blank. It must be 'Public' or 'Private'.`;
-                                validationContainer.appendChild(messageDiv);
                             } else if (!isCorrectPrefix && valueLower !== 'none') {
                                 const messageDiv = document.createElement('div');
                                 messageDiv.classList.add('validation-message', 'validation-error');
@@ -1811,8 +2416,11 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                     'Window Type (Material/Condition)', 'Floors (Material/Condition)', 'Walls (Material/Condition)', 'Trim/Finish (Material/Condition)',
                     'Bath Floor (Material/Condition)', 'Bath Wainscot (Material/Condition)'
                 ];
-                const validConditions = ['good', 'average', 'poor', 'fair'];
+                const validLongConditions = ['good', 'average', 'poor', 'fair'];
+                const validShortConditions = ['a', 'a+', 'b', 'b+', 'c', 'c+', 'd', 'd+', 'avg', 'ag', 'gd', 'pr', 'fr'];
+                const allValidConditions = [...validLongConditions, ...validShortConditions];
                 materialConditionFields.forEach(field => {
+                    const interiorFields = ['Floors (Material/Condition)', 'Walls (Material/Condition)', 'Trim/Finish (Material/Condition)'];
                     const value = getFieldValue(field);
                     if (!value || value === '--' || value === 'null') {
                         addValidationMessage('error', `⚠️ Validation warning: '${field}' cannot be blank.`);
@@ -1820,9 +2428,16 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                         addValidationMessage('error', `⚠️ Validation warning: '${field}' is missing either Material or Condition. It should be in 'Material/Condition' format.`);
                     } else {
                         const parts = value.split('/');
-                        const condition = parts[1]?.trim().toLowerCase();
-                        if (!condition || !validConditions.includes(condition)) {
-                             addValidationMessage('error', `⚠️ Validation warning: The condition for '${field}' ('${parts[1]?.trim()}') is not valid. It must be one of: Good, Average, Poor, Fair.`);
+                        let condition;
+                        // For interior fields, the condition is the last part, even with multiple slashes (e.g., Material/Finish/Condition)
+                        if (interiorFields.includes(field)) {
+                            condition = parts[parts.length - 1]?.trim().toLowerCase();
+                        } else {
+                            condition = parts[1]?.trim().toLowerCase();
+                        }
+
+                        if (!condition || !allValidConditions.includes(condition)) {
+                             addValidationMessage('error', `⚠️ Validation warning: The condition for '${field}' ('${parts[1]?.trim()}') is not valid. It must be one of: Good, Average, Poor, Fair, or a short form like A, B+, C, avg, gd, pr, fr.`);
                         }
                     }
                 });
@@ -1839,8 +2454,17 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                 }
 
                 const fuelValue = getFieldValue('Fuel');
-                if (fuelValue && !['gas', 'oil'].includes(fuelValue.toLowerCase())) {
-                    addValidationMessage('warning', `⚠️ Validation warning: 'Fuel' is '${fuelValue}'. It should typically be 'Gas' or 'Oil'. Please verify.`);
+                if (fuelValue && fuelValue !== '--' && fuelValue !== 'null') {
+                    const validFuels = ['gas', 'oil', 'electric'];
+                    // Split by common delimiters like slash, comma, or space
+                    const fuelParts = fuelValue.toLowerCase().split(/[\s,\/]+/);
+                    
+                    // Check if every part is a valid fuel type
+                    const allPartsValid = fuelParts.every(part => validFuels.includes(part.trim()));
+
+                    if (!allPartsValid) {
+                        addValidationMessage('warning', `⚠️ Validation warning: 'Fuel' is '${fuelValue}'. It contains an atypical type. It should typically be a combination of 'Gas', 'Oil', or 'Electric'. Please verify.`);
+                    }
                 }
 
                 const coolingValue = getFieldValue('Cooling Type');
@@ -1849,20 +2473,53 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                 }
 
                 // --- Car Storage ---
+                const hasValue = (field) => {
+                    const value = getFieldValue(field);
+                    // A field has a value if it's not null, not a placeholder, and not '0' (for numeric fields)
+                    return value && value !== '--' && value !== 'null' && value !== '0';
+                };
+
                 const carStorageValue = getFieldValue('Car Storage');
                 if (carStorageValue) {
-                    if (carStorageValue.toLowerCase().includes('none')) {
-                        const relatedFields = ['Driveway # of Cars', 'Driveway Surface', 'Garage # of Cars', 'Carport # of Cars', 'Garage (Att./Det./Built-in)'];
-                        relatedFields.forEach(field => {
-                            const value = getFieldValue(field);
-                            if (value && value !== '--' && value !== 'null' && value !== '0') {
-                                addValidationMessage('error', `⚠️ Validation warning: 'Car Storage' is 'None', but '${field}' has a value.`);
+                    const carStorageLower = carStorageValue.toLowerCase();
+                    const drivewayFields = ['Driveway # of Cars', 'Driveway Surface'];
+                    const garageFields = ['Garage # of Cars', 'Garage (Att./Det./Built-in)'];
+                    const carportFields = ['Carport # of Cars'];
+
+                    if (carStorageLower.includes('none')) {
+                        // If 'None' is checked, all other car storage fields should be blank.
+                        const allOtherFields = [...drivewayFields, ...garageFields, ...carportFields];
+                        allOtherFields.forEach(field => {
+                            if (hasValue(field)) {
+                                addValidationMessage('error', `⚠️ Validation Mismatch: 'Car Storage' is marked 'None', but '${field}' has a value. It should be blank.`);
                             }
                         });
-                    } else if (carStorageValue.toLowerCase().includes('garage')) {
-                        const garageTypeValue = getFieldValue('Garage (Att./Det./Built-in)');
-                        if (!garageTypeValue || garageTypeValue === '--' || garageTypeValue === 'null') {
-                            addValidationMessage('error', "⚠️ Validation warning: 'Car Storage' includes 'Garage', but the type (Att./Det./Built-in) is not selected.");
+                    } else {
+                        // If 'None' is NOT checked, validate the selected options.
+                        // Check Driveway
+                        if (carStorageLower.includes('driveway') && !hasValue('Driveway # of Cars')) {
+                            addValidationMessage('error', "⚠️ Validation Mismatch: 'Car Storage' includes 'Driveway', but 'Driveway # of Cars' is blank or zero.");
+                        } else if (!carStorageLower.includes('driveway') && (hasValue('Driveway # of Cars') || hasValue('Driveway Surface'))) {
+                            addValidationMessage('error', "⚠️ Validation Mismatch: 'Driveway' is not selected in 'Car Storage', but its related fields have values.");
+                        }
+
+                        // Check Garage
+                        if (carStorageLower.includes('garage')) {
+                            if (!hasValue('Garage # of Cars')) {
+                                addValidationMessage('error', "⚠️ Validation Mismatch: 'Car Storage' includes 'Garage', but 'Garage # of Cars' is blank or zero.");
+                            }
+                            if (!getFieldValue('Garage (Att./Det./Built-in)')) {
+                                addValidationMessage('error', "⚠️ Validation Mismatch: 'Car Storage' includes 'Garage', but the type (Att./Det./Built-in) is not selected.");
+                            }
+                        } else if (!carStorageLower.includes('garage') && (hasValue('Garage # of Cars') || hasValue('Garage (Att./Det./Built-in)'))) {
+                            addValidationMessage('error', "⚠️ Validation Mismatch: 'Garage' is not selected in 'Car Storage', but its related fields have values.");
+                        }
+
+                        // Check Carport
+                        if (carStorageLower.includes('carport') && !hasValue('Carport # of Cars')) {
+                            addValidationMessage('error', "⚠️ Validation Mismatch: 'Car Storage' includes 'Carport', but 'Carport # of Cars' is blank or zero.");
+                        } else if (!carStorageLower.includes('carport') && hasValue('Carport # of Cars')) {
+                            addValidationMessage('error', "⚠️ Validation Mismatch: 'Carport' is not selected in 'Car Storage', but 'Carport # of Cars' has a value.");
                         }
                     }
                 }
@@ -2018,6 +2675,162 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                 }
                 {% endif %}
 
+                {% if section_key == 'sale_history' %}
+                // --- Validation for "My research..." field ---
+                const priorSaleFieldIdentifier = "My research _____ reveal any prior sales or transfers of the subject property for the three years prior to the effective date of this appraisal.(did/did not)";
+                let priorSaleValue = null;
+                
+                // Find the value from the "Research and Analysis" table
+                const researchAndAnalysisTable = document.querySelector('h3:last-of-type + table');
+                if (researchAndAnalysisTable) {
+                    Array.from(researchAndAnalysisTable.querySelectorAll('tbody tr')).forEach(row => {
+                        const fieldCell = row.querySelector('td:first-child');
+                        if (fieldCell && fieldCell.textContent.trim() === priorSaleFieldIdentifier) {
+                            priorSaleValue = row.querySelector('td:last-child')?.textContent.trim().toLowerCase();
+                        }
+                    });
+                }
+
+                if (priorSaleValue === 'did') {
+                    // If prior sale "did" happen, validate the grid data for the subject
+                    const priorSaleGrid = document.querySelector('h3:first-of-type + table');
+                    let priorSaleDate = null;
+                    let priorSalePrice = null;
+
+                    if (priorSaleGrid) {
+                        Array.from(priorSaleGrid.querySelectorAll('tbody tr')).forEach(row => {
+                            const fieldCell = row.querySelector('td:first-child');
+                            const subjectValueCell = row.querySelector('td:nth-child(2)'); // Subject is the 2nd column
+                            if (fieldCell && subjectValueCell) {
+                                const fieldName = fieldCell.textContent.trim();
+                                if (fieldName === "Date of Prior Sale/Transfer") {
+                                    priorSaleDate = subjectValueCell.textContent.trim();
+                                }
+                                if (fieldName === "Price of Prior Sale/Transfer") {
+                                    priorSalePrice = subjectValueCell.textContent.trim();
+                                }
+                            }
+                        });
+                    }
+
+                    const effectiveDateStr = sessionStorage.getItem('reconciliationEffectiveDate');
+                    const isDateBlank = !priorSaleDate || priorSaleDate === '--' || priorSaleDate === 'null';
+                    const isPriceBlank = !priorSalePrice || priorSalePrice === '--' || priorSalePrice === 'null';
+
+                    if (isDateBlank) addValidationMessage('error', "⚠️ Validation Error: Prior sale was indicated ('did'), but the 'Date of Prior Sale/Transfer' for the subject is blank.");
+                    if (isPriceBlank) addValidationMessage('error', "⚠️ Validation Error: Prior sale was indicated ('did'), but the 'Price of Prior Sale/Transfer' for the subject is blank.");
+
+                    if (effectiveDateStr && !isDateBlank) {
+                        const effectiveDate = new Date(effectiveDateStr);
+                        const saleDate = new Date(priorSaleDate);
+                        const threeYearsAgo = new Date(effectiveDate.setFullYear(effectiveDate.getFullYear() - 3));
+                        if (saleDate < threeYearsAgo) {
+                            addValidationMessage('error', `⚠️ Validation Error: The 'Date of Prior Sale/Transfer' (${priorSaleDate}) must be within 3 years of the effective date (${effectiveDateStr}).`);
+                        }
+                    } else if (!effectiveDateStr && !isDateBlank) {
+                        addValidationMessage('warning', "ℹ️ Info: Could not verify the 3-year sale history window because the report's effective date was not found. Please visit the 'Reconciliation' section first.");
+                    }
+                }
+                {% endif %}
+
+                {% if section_key == 'sale_history' %}
+                // --- Validation for Comparable Sales History ---
+                const compResearchFieldIdentifier = "My research ______ reveal any prior sales or transfers of the comparable sales for the year prior to the date of sale of the comparable sale.(did/did not)";
+                let compResearchValue = null;
+
+                // Find the value from the "Research and Analysis" table
+                const researchAndAnalysisTableForComp = document.querySelector('h3:last-of-type + table');
+                if (researchAndAnalysisTableForComp) {
+                    Array.from(researchAndAnalysisTableForComp.querySelectorAll('tbody tr')).forEach(row => {
+                        const fieldCell = row.querySelector('td:first-child');
+                        if (fieldCell && fieldCell.textContent.trim() === compResearchFieldIdentifier) {
+                            compResearchValue = row.querySelector('td:last-child')?.textContent.trim().toLowerCase();
+                        }
+                    });
+                }
+
+                const priorSaleGridForComp = document.querySelector('h3:first-of-type + table');
+                let compDates = [];
+                let compPrices = [];
+
+                if (priorSaleGridForComp) {
+                    const headerCells = priorSaleGridForComp.querySelectorAll('thead th');
+                    const numComps = headerCells.length - 2; // Exclude 'Feature' and 'Subject'
+
+                    Array.from(priorSaleGridForComp.querySelectorAll('tbody tr')).forEach(row => {
+                        const fieldName = row.querySelector('td:first-child')?.textContent.trim();
+                        if (fieldName === "Date of Prior Sale/Transfer") {
+                            for (let i = 0; i < numComps; i++) {
+                                compDates.push(row.querySelector(`td:nth-child(${i + 3})`)?.textContent.trim());
+                            }
+                        }
+                        if (fieldName === "Price of Prior Sale/Transfer") {
+                            for (let i = 0; i < numComps; i++) {
+                                compPrices.push(row.querySelector(`td:nth-child(${i + 3})`)?.textContent.trim());
+                            }
+                        }
+                    });
+                }
+
+                const isBlank = (val) => !val || val === '--' || val === 'null';
+
+                if (compResearchValue === 'did') {
+                    // At least one comp must have both date and price filled.
+                    const anyCompHasData = compDates.some((date, index) => !isBlank(date) && !isBlank(compPrices[index]));
+                    if (!anyCompHasData) {
+                        addValidationMessage('error', "⚠️ Validation Error: Research for comparable sales 'did' reveal prior sales, but no comparable has both 'Date of Prior Sale/Transfer' and 'Price of Prior Sale/Transfer' filled in the grid.");
+                    } else {
+                        addValidationMessage('success', "✅ Validation successful: Research for comparable sales 'did' reveal prior sales, and at least one comparable has prior sale data.");
+                    }
+                } else if (compResearchValue === 'did not') {
+                    // All comp fields must be blank.
+                    const allCompsAreBlank = compDates.every(isBlank) && compPrices.every(isBlank);
+                    if (!allCompsAreBlank) {
+                        addValidationMessage('error', "⚠️ Validation Error: Research for comparable sales 'did not' reveal prior sales, but some comparables have data in the 'Date' or 'Price' of prior sale fields. These should be blank.");
+                    } else {
+                        addValidationMessage('success', "✅ Validation successful: Research for comparable sales 'did not' reveal prior sales, and all comparable prior sale fields are correctly blank.");
+                    }
+                } else {
+                    // The checkbox cannot be blank.
+                    addValidationMessage('error', "⚠️ Validation Error: The field 'My research ______ reveal any prior sales or transfers of the comparable sales...' cannot be blank. Please select 'did' or 'did not'.");
+                }
+                {% endif %}
+
+                {% if section_key == 'sale_history' %}
+                // Validation for Sale History research
+                const researchFieldIdentifier = "I ____ research the sale or transfer history of the subject property and comparable sales.(did/did not)";
+                let researchValue = null;
+                let explanationValue = null;
+
+                tableRows.forEach(row => {
+                    const fieldCell = row.querySelector('td:first-child');
+                    if (fieldCell) {
+                        const fieldName = fieldCell.textContent.trim();
+                        if (fieldName === researchFieldIdentifier) {
+                            researchValue = row.querySelector('td:last-child')?.textContent.trim().toLowerCase();
+                        }
+                        if (fieldName === "If not, explain") {
+                            explanationValue = row.querySelector('td:last-child')?.textContent.trim();
+                        }
+                    }
+                });
+
+                const messageDiv = document.createElement('div');
+                messageDiv.classList.add('validation-message');
+
+                if (researchValue === 'did not') {
+                    messageDiv.classList.add('error'); // Use the critical error style
+                    messageDiv.innerHTML = `<strong>⚠️ CRITICAL ERROR: Research for sale or transfer history must be performed. This field cannot be marked 'did not'.</strong>`;
+                } else if (researchValue === 'did') {
+                    messageDiv.classList.add('validation-success');
+                    messageDiv.textContent = `✅ Validation successful: Research for sale or transfer history was performed ('did').`;
+                } else {
+                    messageDiv.classList.add('validation-error');
+                    messageDiv.textContent = `⚠️ Validation warning: The research field for sale or transfer history must be marked 'did' or 'did not'. It is currently blank.`;
+                }
+                validationContainer.appendChild(messageDiv);
+                {% endif %}
+
                 {% if section_key == 'sales_grid' %}
                 // Store the 'Indicated Value by Sales Comparison Approach' for cross-validation
                 // The structure is different for the sales grid, so we find the specific cell
@@ -2068,53 +2881,115 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                 {% endif %}
 
                 {% if section_key == 'reconciliation' %}
-                // Validation for value consistency across sections
-                const salesGridValue = sessionStorage.getItem('salesGridIndicatedValue');
-                let reconciliationSalesApproachValue = null;
-                let finalMarketValue = null;
+                // Asynchronous validation for value consistency
+                async function validateAppraisedValues() {
+                    const salesGridValue = sessionStorage.getItem('salesGridIndicatedValue');
+                    let reconciliationSalesApproachValue = null;
+                    let finalMarketValue = null;
 
-                const finalMarketValueField = "Based on a complete visual inspection of the interior and exterior areas of the subject property, defined scope of work, statement of assumptions and limiting conditions, and appraiser's certification, my (our) opinion of the market value, as defined, of the real property that is the subject of this report is $_______, as of ________, which is the date of inspection and the effective date of this appraisal.";
+                    // Store Effective Date of Value for certification check
+                    tableRows.forEach(row => {
+                        const fieldName = row.querySelector('td:first-child')?.textContent.trim();
+                        const value = row.querySelector('td:last-child')?.textContent.trim();
+                        if (fieldName === 'Effective Date of Value') {
+                            sessionStorage.setItem('reconciliationEffectiveDate', value);
+                        }
+                    });
 
-                tableRows.forEach(row => {
-                    const fieldCell = row.querySelector('td:first-child');
-                    const valueCell = row.querySelector('td:last-child');
-                    const fieldName = fieldCell.textContent.trim();
-                    const value = valueCell.textContent.trim();
 
-                    if (fieldName === 'Indicated Value by: Sales Comparison Approach $') {
-                        reconciliationSalesApproachValue = value;
-                    } else if (fieldName === 'Opinion of Market Value $') {
-                        finalMarketValue = value;
+                    // 1. Get values from the current (Reconciliation) section
+                    tableRows.forEach(row => {
+                        const fieldName = row.querySelector('td:first-child')?.textContent.trim();
+                        const value = row.querySelector('td:last-child')?.textContent.trim();
+                        if (fieldName === 'Indicated Value by: Sales Comparison Approach $') {
+                            reconciliationSalesApproachValue = value;
+                        } else if (fieldName === 'Opinion of Market Value $') {
+                            finalMarketValue = value;
+                        }
+                    });
+
+                    // 2. Fetch Certification data from the backend
+                    let certificationAppraisedValue = null;
+                    try {
+                        const response = await fetch(`/api/data/{{ filename }}/certification/`);
+                        const certData = await response.json();
+                        if (certData && !certData.error) {
+                            certificationAppraisedValue = certData['APPRAISED VALUE OF SUBJECT PROPERTY $'];
+                        }
+                    } catch (error) {
+                        console.error('Error fetching certification data:', error);
                     }
-                });
 
-                const messageDiv = document.createElement('div');
-                messageDiv.classList.add('validation-message');
+                    // 3. Perform the validation
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message');
 
-                // Check for blank values first
-                if (!salesGridValue || !reconciliationSalesApproachValue || !finalMarketValue) {
-                    const missing = [];
-                    if (!salesGridValue) missing.push("'Indicated Value' from Sales Grid (view Sales Grid section to set)");
-                    if (!reconciliationSalesApproachValue) missing.push("'Indicated Value by Sales Comparison Approach'");
-                    if (!finalMarketValue) missing.push("'Opinion of Market Value $'");
+                    const values = {
+                        'Indicated Value by Sales Comparison Approach (from Sales Grid)': salesGridValue,
+                        'Indicated Value by: Sales Comparison Approach $ (from Reconciliation)': reconciliationSalesApproachValue,
+                        'Opinion of Market Value $ (from Reconciliation)': finalMarketValue,
+                        'APPRAISED VALUE OF SUBJECT PROPERTY $ (from Certification)': certificationAppraisedValue
+                    };
 
-                    messageDiv.classList.add('validation-error');
-                    messageDiv.textContent = `⚠️ Validation warning: One or more values for comparison are blank. Missing: ${missing.join(', ')}.`;
-                } else {
-                    // Normalize values by removing '$' and commas
-                    const normSalesGrid = salesGridValue.replace(/[$,]/g, '');
-                    const normReconSales = reconciliationSalesApproachValue.replace(/[$,]/g, '');
-                    const normFinalMarket = finalMarketValue.replace(/[$,]/g, '');
+                    const missing = Object.entries(values).filter(([key, val]) => !val || val === '--' || val === 'null').map(([key, val]) => `'${key}'`);
 
-                    if (normSalesGrid === normReconSales && normReconSales === normFinalMarket) {
-                        messageDiv.classList.add('validation-success');
-                        messageDiv.textContent = `✅ Validation successful: All indicated values match (${salesGridValue}).`;
-                    } else {
+                    if (missing.length > 0) {
                         messageDiv.classList.add('validation-error');
-                        messageDiv.textContent = `⚠️ Validation warning: Indicated values do not match. Sales Grid: ${salesGridValue}, Reconciliation Sales Approach: ${reconciliationSalesApproachValue}, Final Market Value: ${finalMarketValue}`;
+                        messageDiv.textContent = `⚠️ Validation warning: One or more values for comparison are blank. Missing: ${missing.join(', ')}.`;
+                    } else {
+                        const normValues = Object.values(values).map(v => v.replace(/[$,]/g, ''));
+                        const allMatch = normValues.every(v => v === normValues[0]);
+
+                        if (allMatch) {
+                            messageDiv.classList.add('validation-success');
+                            messageDiv.textContent = `✅ Validation successful: All four appraised values match (${salesGridValue}).`;
+                        } else {
+                            messageDiv.classList.add('validation-error');
+                            messageDiv.textContent = `⚠️ Validation warning: Appraised values do not match. Sales Grid: ${salesGridValue}, Reconciliation Sales: ${reconciliationSalesApproachValue}, Final Market Value: ${finalMarketValue}, Certification Value: ${certificationAppraisedValue}`;
+                        }
+                    }
+                    validationContainer.appendChild(messageDiv);
+                }
+                // Run the async validation
+                validateAppraisedValues();
+
+                // --- Original Reconciliation Validations ---
+                // Validation for Improvement Status vs. Reconciliation Status
+                const improvementStatus = sessionStorage.getItem('improvementStatus'); // 'existing', 'proposed', etc.
+                if (improvementStatus) {
+                    let reconciliationAppraisalStatus = null;
+                    const reconciliationStatusFieldIdentifier = "This appraisal is made";
+
+                    tableRows.forEach(row => {
+                        const fieldCell = row.querySelector('td:first-child');
+                        if (fieldCell && fieldCell.textContent.trim().startsWith(reconciliationStatusFieldIdentifier)) {
+                            const valueCell = row.querySelector('td:last-child');
+                            reconciliationAppraisalStatus = valueCell.textContent.trim().toLowerCase();
+                        }
+                    });
+
+                    if (reconciliationAppraisalStatus) {
+                        const statusMessageDiv = document.createElement('div');
+                        statusMessageDiv.classList.add('validation-message');
+                        let isConsistent = false;
+                        let expectedReconStatus = '';
+
+                        if (improvementStatus === 'existing' && reconciliationAppraisalStatus.includes('as is')) {
+                            isConsistent = true;
+                        } else if ((improvementStatus === 'proposed' || improvementStatus === 'under const.') && reconciliationAppraisalStatus.includes('subject to completion')) {
+                            isConsistent = true;
+                        }
+
+                        if (isConsistent) {
+                            statusMessageDiv.classList.add('validation-success');
+                            statusMessageDiv.textContent = `✅ Validation successful: Improvement status '${improvementStatus}' is consistent with Reconciliation status '${reconciliationAppraisalStatus}'.`;
+                        } else {
+                            statusMessageDiv.classList.add('validation-error');
+                            statusMessageDiv.textContent = `⚠️ Validation Mismatch: Improvement status is '${improvementStatus}'. The Reconciliation status should be '${improvementStatus === 'existing' ? 'as is' : 'subject to completion...'}', but it is '${reconciliationAppraisalStatus}'.`;
+                        }
+                        validationContainer.appendChild(statusMessageDiv);
                     }
                 }
-                validationContainer.appendChild(messageDiv);
                 {% endif %}
 
                 {% if section_key == 'cost_approach' %}
@@ -2143,7 +3018,63 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                 {% endif %}
 
                 {% if section_key == 'certification' %}
+                // --- Helper function to get a field's value ---
+                const getFieldValue = (fieldName) => {
+                    const row = Array.from(tableRows).find(r => r.querySelector('td:first-child')?.textContent.trim() === fieldName);
+                    return row ? row.querySelector('td:last-child')?.textContent.trim() : null;
+                };
+
+                // --- Helper function to add validation messages ---
+                const addValidationMessage = (type, message) => {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message', `validation-${type}`);
+                    messageDiv.innerHTML = message; // Use innerHTML to allow for bold tags
+                    validationContainer.appendChild(messageDiv);
+                };
+
+                // 1. Date of Signature vs. Effective Date of Appraisal
+                const signatureDateStr = getFieldValue('Date of Signature and Report');
+                const effectiveDateStr = getFieldValue('Effective Date of Appraisal');
+                if (signatureDateStr && effectiveDateStr) {
+                    const sigDate = new Date(signatureDateStr);
+                    const effDate = new Date(effectiveDateStr);
+                    if (!isNaN(sigDate.getTime()) && !isNaN(effDate.getTime())) {
+                        if (sigDate > effDate) {
+                            addValidationMessage('success', `✅ Validation successful: 'Date of Signature' (${signatureDateStr}) is after 'Effective Date of Appraisal' (${effectiveDateStr}).`);
+                        } else {
+                            addValidationMessage('error', `⚠️ Validation warning: 'Date of Signature' (${signatureDateStr}) must be greater than 'Effective Date of Appraisal' (${effectiveDateStr}).`);
+                        }
+                    } else {
+                        addValidationMessage('error', "⚠️ Validation warning: Could not parse one or both dates for comparison.");
+                    }
+                }
+
+                // 2. Effective Date of Appraisal vs. Reconciliation's "as of" date
+                const reconciliationEffectiveDate = sessionStorage.getItem('reconciliationEffectiveDate');
+                if (reconciliationEffectiveDate) {
+                    if (effectiveDateStr === reconciliationEffectiveDate) {
+                        addValidationMessage('success', `✅ Validation successful: 'Effective Date of Appraisal' (${effectiveDateStr}) matches the 'Effective Date of Value' from the Reconciliation section.`);
+                    } else {
+                        addValidationMessage('error', `⚠️ Validation warning: 'Effective Date of Appraisal' (${effectiveDateStr}) does not match the 'Effective Date of Value' from the Reconciliation section (${reconciliationEffectiveDate}).`);
+                    }
+                } else {
+                    addValidationMessage('warning', "ℹ️ Info: Could not find 'Effective Date of Value' from Reconciliation section to compare. Please visit the Reconciliation section first.");
+                }
+                
+                // 5. LENDER/CLIENT Name should always have "fastapp"
+                const lenderClientName = getFieldValue('LENDER/CLIENT Name');
+                if (lenderClientName) {
+                    if (lenderClientName.toLowerCase().includes('fastapp')) {
+                        addValidationMessage('success', "✅ Validation successful: 'LENDER/CLIENT Name' contains the word 'fastapp'.");
+                    } else {
+                        addValidationMessage('error', `⚠️ Validation warning: 'LENDER/CLIENT Name' ('${lenderClientName}') does not contain the word 'fastapp'.`);
+                    }
+                }
+
+
                 // Validation for Lender/Client consistency
+                const subjectState = sessionStorage.getItem('subjectState');
+                
                 const subjectLenderClient = sessionStorage.getItem('subjectLenderClient');
                 if (subjectLenderClient) {
                     let certificationLenderClientCompanyName = null;
@@ -2170,7 +3101,107 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                     }
                     validationContainer.appendChild(messageDiv);
                 }
+
+                // 6. Lender/Client Company Address vs. Subject section lender address
+                const subjectLenderAddress = sessionStorage.getItem('subjectLenderAddress');
+                const certificationLenderAddress = getFieldValue('Lender/Client Company Address');
+                if (subjectLenderAddress) {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message');
+                    const normalize = (str) => str.replace(/,/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+                    if (certificationLenderAddress && normalize(subjectLenderAddress) === normalize(certificationLenderAddress)) {
+                        messageDiv.classList.add('validation-success');
+                        messageDiv.textContent = `✅ Validation successful: 'Lender/Client Company Address' in Certification matches the address from the Subject section.`;
+                    } else {
+                        messageDiv.classList.add('validation-error');
+                        messageDiv.textContent = `⚠️ Validation warning: Lender address mismatch. Subject section has '${subjectLenderAddress}', but Certification has '${certificationLenderAddress || 'a blank address'}'.`;
+                    }
+                    validationContainer.appendChild(messageDiv);
+                } else {
+                    addValidationMessage('warning', "ℹ️ Info: Could not find the lender address from the Subject section to compare. Please visit the Subject section first.");
+                }
+
+                // 4. ADDRESS OF PROPERTY APPRAISED vs. Subject Section Address
+                const subjectFullAddress = sessionStorage.getItem('subjectFullAddress');
+                const certificationAddress = getFieldValue('ADDRESS OF PROPERTY APPRAISED');
+                if (subjectFullAddress) {
+                    // Normalize by removing commas and extra spaces, and converting to lower case
+                    const normalize = (str) => str ? str.replace(/,/g, '').replace(/\s+/g, ' ').trim().toLowerCase() : '';
+                    if (certificationAddress && normalize(subjectFullAddress) === normalize(certificationAddress)) {
+                        addValidationMessage('success', "✅ Validation successful: 'ADDRESS OF PROPERTY APPRAISED' matches the address from the Subject section.");
+                    } else {
+                        addValidationMessage('error', `⚠️ Validation warning: Address mismatch. Subject section has '${subjectFullAddress}', but Certification has '${certificationAddress || 'a blank address'}'.`);
+                    }
+                } else {
+                    addValidationMessage('warning', "ℹ️ Info: Could not find the full address from the Subject section to compare. Please visit the Subject section first.");
+                }
+
+
+
                 {% endif %}
+
+                {% if section_key == 'certification' %}
+                // --- Appraiser License Validation ---
+                const licenseName = getFieldValue('Appraiser Name on License');
+                const licenseNumber = getFieldValue('License Number on License');
+                const licenseExpDate = getFieldValue('License Expiration Date on License');
+
+                if (licenseName || licenseNumber || licenseExpDate) {
+                    addValidationMessage('success', '✅ Attached license found. Performing validation...');
+
+                    // 1. Validate Name
+                    const certName = getFieldValue('Name');
+                    if (certName && licenseName && certName.toLowerCase() !== licenseName.toLowerCase()) {
+                        // Allow for partial matches (e.g., middle initial vs. full middle name)
+                        const certNameParts = certName.toLowerCase().split(' ');
+                        const licenseNameParts = licenseName.toLowerCase().split(' ');
+                        const isMatch = certNameParts.every(part => licenseName.toLowerCase().includes(part));
+
+                        if (!isMatch) {
+                             addValidationMessage('error', `⚠️ Name Mismatch: Certification name is '${certName}' but license name is '${licenseName}'.`);
+                        } else {
+                             addValidationMessage('success', `✅ Name Consistent: Certification name '${certName}' is consistent with license name '${licenseName}'.`);
+                        }
+                    }
+
+                    // 2. Validate License Number
+                    const certLicenseNumber = getFieldValue('State Certification # or State License #');
+                    if (certLicenseNumber && licenseNumber && certLicenseNumber.replace(/\s/g, '') !== licenseNumber.replace(/\s/g, '')) {
+                        addValidationMessage('error', `⚠️ License Number Mismatch: Certification number is '${certLicenseNumber}' but license number is '${licenseNumber}'.`);
+                    } else if (certLicenseNumber && licenseNumber) {
+                        addValidationMessage('success', `✅ License Number Match: '${certLicenseNumber}'.`);
+                    }
+
+                    // 3. Validate Expiration Date
+                    const certExpDate = getFieldValue('Expiration Date of Certification or License');
+                    if (certExpDate && licenseExpDate && new Date(certExpDate).getTime() !== new Date(licenseExpDate).getTime()) {
+                        addValidationMessage('error', `⚠️ Expiration Date Mismatch: Certification date is '${certExpDate}' but license date is '${licenseExpDate}'.`);
+                    } else if (certExpDate && licenseExpDate) {
+                        addValidationMessage('success', `✅ License Expiration Date Match: '${certExpDate}'.`);
+                    }
+
+                } else {
+                    addValidationMessage('warning', "⚠️ No attached appraiser license was found in the document. Manual verification of license details is required.");
+                }
+
+                // --- E&O Insurance Expiration Validation ---
+                const eoExpDateStr = getFieldValue('E&O Expiration Date on Document');
+                if (eoExpDateStr && eoExpDateStr !== 'null') {
+                    const eoExpDate = new Date(eoExpDateStr);
+                    const today = new Date();
+                    // Set hours to 0 to compare dates only, ignoring time
+                    today.setHours(0, 0, 0, 0);
+
+                    if (!isNaN(eoExpDate.getTime())) {
+                        if (eoExpDate < today) {
+                            addValidationMessage('error', `❌ E&O Insurance Expired: The policy expired on ${eoExpDateStr}.`);
+                        } else {
+                            addValidationMessage('success', `✅ E&O Insurance is valid. Expires on ${eoExpDateStr}.`);
+                        }
+                    }
+                }
+                {% endif %}
+
 
                 {% if section_key == 'market_conditions' %}
                 // Validation for Market Conditions Inventory Analysis
@@ -2249,47 +3280,208 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                     }
                 }
                 {% endif %}
+            }
+            {% if section_key == 'state_requirement' %}
+            function runStateValidations() {
+                const validationContainer = document.getElementById('validation-container');
+                validationContainer.innerHTML = ''; // Clear previous messages
+                const subjectState = sessionStorage.getItem('subjectState');
 
-                {% if section_key == 'neighborhood' %}
-                // Validation for "one unit housing age(high,low,pred)"
+                const getFieldValue = (fieldName) => {
+                    const row = Array.from(document.querySelectorAll('tbody tr')).find(r => r.querySelector('td:first-child')?.textContent.trim() === fieldName);
+                    return row ? row.querySelector('td:last-child')?.textContent.trim().toLowerCase() : null;
+                };
+
+                const addValidationMessage = (type, message) => {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message', `validation-${type}`);
+                    messageDiv.innerHTML = message;
+                    validationContainer.appendChild(messageDiv);
+                };
+
+                if (!subjectState) {
+                    addValidationMessage('error', "⚠️ Could not determine the property's state. Please review the 'Subject' section first.");
+                    return;
+                }
+
+                // addValidationMessage('warning', `ℹ️ Validating requirements for state: <strong>${subjectState}</strong>`);
+
+                // --- Fee & License Requirements ---
+                const feeStates = ['AZ', 'CO', 'CT', 'GA', 'IL', 'LA', 'NJ', 'NV', 'NM', 'ND', 'OH', 'UT', 'VA', 'VT', 'WV'];
+                const amcLicenseStates = ['GA', 'IL', 'MT', 'NJ', 'OH', 'VT'];
+                const amcFeeStates = ['NV', 'NM', 'UT'];
+                let hasRules = false;
+
+                const checkRequirement = (applies, fieldName, finding) => {
+                    if (!applies) return;
+                    hasRules = true;
+                    if (finding && (finding.includes('found') || finding.includes('disclosed') || finding.includes('present') || finding.includes('verified'))) {
+                        addValidationMessage('success', `✅ <strong>${fieldName}:</strong> Passed. Requirement appears to be met.`);
+                    } else if (finding && (finding.includes('not found') || finding.includes('missing') || finding.includes('not present'))) {
+                        addValidationMessage('error', `❌ <strong>${fieldName}:</strong> Failed. Requirement was not met according to the analysis.`);
+                    } else {
+                        addValidationMessage('warning', `⚠️ <strong>${fieldName}:</strong> Needs Review. The analysis was inconclusive. Please verify manually.`);
+                    }
+                };
+
+                if (feeStates.includes(subjectState)) {
+                    const finding = getFieldValue('Appraiser Fee Disclosure');
+                    checkRequirement(true, 'Appraiser Fee Disclosure', finding);
+                }
+                if (amcLicenseStates.includes(subjectState)) {
+                    const finding = getFieldValue('AMC License Disclosure');
+                    checkRequirement(true, 'AMC License Disclosure', finding);
+                }
+                if (amcFeeStates.includes(subjectState)) {
+                    const finding = getFieldValue('AMC Fee Disclosure');
+                    checkRequirement(true, 'AMC Fee Disclosure', finding);
+                }
+
+                // --- Specific State Guidelines ---
+                switch (subjectState) {
+                    case 'CA':
+                        checkRequirement(true, 'Smoke/CO Detector Requirements', getFieldValue('Smoke/CO Detector Requirements'));
+                        checkRequirement(true, 'Water Heater Strapping', getFieldValue('Water Heater Strapping'));
+                        hasRules = true;
+                        break;
+                    case 'GA':
+                        // These are covered by the general checks above, but we can add a summary
+                        addValidationMessage('warning', `<strong>GA Specific:</strong> Appraiser’s fee & AMC License # are required.`);
+                        hasRules = true;
+                        break;
+                    case 'IL':
+                        checkRequirement(true, 'AMC License Disclosure', getFieldValue('AMC License Disclosure'));
+                        checkRequirement(true, 'Appraiser Fee Disclosure', getFieldValue('Appraiser Fee Disclosure'));
+                        checkRequirement(true, 'Smoke/CO Detector Requirements', getFieldValue('Smoke/CO Detector Requirements'));
+                        checkRequirement(true, 'State-Specific Legal Statements', getFieldValue('State-Specific Legal Statements'));
+                        hasRules = true;
+                        break;
+                    case 'NY':
+                        checkRequirement(true, 'Invoice Copy Requirement', getFieldValue('Invoice Copy Requirement'));
+                        hasRules = true;
+                        break;
+                    case 'OH':
+                    case 'VT':
+                        addValidationMessage('warning', `<strong>${subjectState} Specific:</strong> Appraiser’s fee & AMC License # are required.`);
+                        checkRequirement(true, 'Appraiser Fee Disclosure', getFieldValue('Appraiser Fee Disclosure'));
+                        checkRequirement(true, 'AMC License Disclosure', getFieldValue('AMC License Disclosure'));
+                        hasRules = true;
+                        break;
+                    case 'UT':
+                        checkRequirement(true, 'Water Heater Strapping', getFieldValue('Water Heater Strapping'));
+                        checkRequirement(true, 'AMC Fee Disclosure', getFieldValue('AMC Fee Disclosure'));
+                        checkRequirement(true, 'Appraiser Fee Disclosure', getFieldValue('Appraiser Fee Disclosure'));
+                        hasRules = true;
+                        break;
+                    case 'VA':
+                        checkRequirement(true, 'Smoke/CO Detector Requirements', getFieldValue('Smoke/CO Detector Requirements'));
+                        checkRequirement(true, 'Appraiser Fee Disclosure', getFieldValue('Appraiser Fee Disclosure'));
+                        hasRules = true;
+                        break;
+                    case 'WI':
+                        checkRequirement(true, 'Smoke/CO Detector Requirements', getFieldValue('Smoke/CO Detector Requirements'));
+                        hasRules = true;
+                        break;
+                }
+
+                // Check if any rules were applied. If not, show the 'no rules' message.
+                const allRuleStates = [...new Set([...feeStates, ...amcLicenseStates, ...amcFeeStates, 'CA', 'GA', 'IL', 'NY', 'OH', 'VT', 'UT', 'VA', 'WI'])];
+                if (!allRuleStates.includes(subjectState)) {
+                     addValidationMessage('success', `✅ No specific state-level requirements found for <strong>${subjectState}</strong> in the defined rules.`);
+                }
+
+            }
+            // Override the default validate button behavior for this specific section
+            document.getElementById('validate-btn').addEventListener('click', runStateValidations);
+            // Run validations on initial page load
+            runStateValidations();
+            {% else %}
+            {% comment %} Add client_lender_requirements validation here {% endcomment %}
+            {% if section_key == 'client_lender_requirements' %}
+            function runClientLenderValidations() {
+                const validationContainer = document.getElementById('validation-container');
+                validationContainer.innerHTML = ''; // Clear previous messages
+
+                const getFieldValue = (fieldName) => {
+                    const row = Array.from(document.querySelectorAll('tbody tr')).find(r => r.querySelector('td:first-child')?.textContent.trim() === fieldName);
+                    return row ? row.querySelector('td:last-child')?.textContent.trim() : null;
+                };
+
+                const addValidationMessage = (type, message) => {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message', `validation-${type}`);
+                    messageDiv.innerHTML = message;
+                    validationContainer.appendChild(messageDiv);
+                };
+
+                // Iterate through each row in the table for client/lender requirements
+                const tableRows = document.querySelectorAll('tbody tr');
+                let clientIdentified = false; // Flag to check if a client was identified
+
                 tableRows.forEach(row => {
                     const fieldCell = row.querySelector('td:first-child');
-                    if (fieldCell && fieldCell.textContent.trim() === 'one unit housing age(high,low,pred)') {
-                        const valueCell = row.querySelector('td:last-child');
-                        const valueText = valueCell.textContent.trim();
+                    const valueCell = row.querySelector('td:last-child');
 
-                        // Clean the string: remove spaces, and split by comma or slash
-                        const parts = valueText.replace(/\s/g, '').split(/[\/,]/);
+                    if (fieldCell && valueCell) {
+                        const fieldName = fieldCell.textContent.trim();
+                        const value = valueCell.textContent.trim();
+                        const valueLower = value.toLowerCase();
 
-                        if (parts.length === 3) {
-                            const high = parseInt(parts[0], 10);
-                            const low = parseInt(parts[1], 10);
-                            const pred = parseInt(parts[2], 10);
+                        if (valueLower.includes('n/a - client not identified')) {
+                            addValidationMessage('error', `⚠️ <strong>${fieldName}:</strong> ${value}`);
+                            return; // Skip further processing for this row if client not identified
+                        }
 
-                            if (!isNaN(high) && !isNaN(low) && !isNaN(pred)) {
-                                const messageDiv = document.createElement('div');
-                                messageDiv.classList.add('validation-message');
-
-                                if (pred >= Math.min(low, high) && pred <= Math.max(low, high)) {
-                                    messageDiv.classList.add('validation-success');
-                                    messageDiv.textContent = `✅ Validation successful: The predominant housing age (${pred} yrs) is within the low (${low} yrs) and high (${high} yrs) range.`;
-                                } else {
-                                    messageDiv.classList.add('validation-error');
-                                    messageDiv.textContent = `⚠️ Validation warning: The predominant housing age (${pred} yrs) is outside the low (${low} yrs) and high (${high} yrs) range.`;
-                                }
-                                validationContainer.appendChild(messageDiv);
-                            }
+                        if (valueLower.includes('n/a - rule does not apply')) {
+                            addValidationMessage('success', `✅ <strong>${fieldName}:</strong> ${value}`);
+                            clientIdentified = true;
+                        } else if (valueLower.includes('passed:')) {
+                            addValidationMessage('success', `✅ <strong>${fieldName}:</strong> ${value.replace(/passed:/i, '').trim()}`);
+                            clientIdentified = true;
+                        } else if (valueLower.includes('failed:')) {
+                            addValidationMessage('error', `❌ <strong>${fieldName}:</strong> ${value.replace(/failed:/i, '').trim()}`);
+                            clientIdentified = true;
+                        } else if (valueLower.includes('info:')) {
+                            addValidationMessage('warning', `ℹ️ <strong>${fieldName}:</strong> ${value.replace(/info:/i, '').trim()}`);
+                            clientIdentified = true;
+                        } else if (valueLower.includes('advisory:')) {
+                            addValidationMessage('warning', `⚠️ <strong>${fieldName}:</strong> ${value.replace(/advisory:/i, '').trim()}`);
+                            clientIdentified = true;
+                        } else if (valueLower.includes('escalate:')) {
+                            addValidationMessage('error', `🚨 <strong>${fieldName}:</strong> ${value.replace(/escalate:/i, '').trim()}`);
+                            clientIdentified = true;
+                        } else if (valueLower.includes('reviewer reminders:')) {
+                            addValidationMessage('warning', `ℹ️ <strong>${fieldName}:</strong> ${value.replace(/reviewer reminders:/i, '').trim()}`);
+                            clientIdentified = true;
+                        } else if (valueLower.includes('rov handling:')) {
+                            addValidationMessage('warning', `ℹ️ <strong>${fieldName}:</strong> ${value.replace(/rov handling:/i, '').trim()}`);
+                            clientIdentified = true;
+                        } else if (valueLower.startsWith('n/a -')) { // Catch all N/A messages not specifically "rule does not apply"
+                            addValidationMessage('success', `✅ <strong>${fieldName}:</strong> ${value}`);
+                            clientIdentified = true;
+                        } else {
+                            // Default handling for any other value, perhaps a general warning or info
+                            addValidationMessage('warning', `❓ <strong>${fieldName}:</strong> Uncategorized finding: ${value}`);
+                            clientIdentified = true;
                         }
                     }
                 });
-                {% endif %}
+
+                if (!clientIdentified) {
+                    addValidationMessage('error', `⚠️ <strong>Client Identification:</strong> Could not identify a specific client or apply any rules. Please ensure the client name is present in the report.`);
+                }
             }
-
-            // Add event listener for the validate button
+            // Override the default validate button behavior for this specific section
+            document.getElementById('validate-btn').addEventListener('click', runClientLenderValidations);
+            // Run validations on initial page load
+            runClientLenderValidations();
+            {% else %}
+            // Add event listener for the validate button for all other sections
             document.getElementById('validate-btn').addEventListener('click', runValidations);
-
             // Run validations on initial page load (after revision setup)
             runValidations();
+            {% endif %}
+            {% endif %}
 
             // --- Custom Analysis Page Specific JS ---
             if (document.body.contains(document.getElementById('custom-analysis-form'))) {
@@ -2311,6 +3503,47 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                         // The loading overlay is in the main content, so we need to show it
                         const loadingOverlay = document.getElementById('loading-overlay');
                         if(loadingOverlay) loadingOverlay.style.display = 'flex';
+                    }
+                });
+
+                const finishBtn = document.getElementById('finish-review-btn');
+                if (finishBtn) {
+                    finishBtn.addEventListener('click', function() {
+                        const startTimeISO = new Date(parseInt(sessionStorage.getItem('reviewStartTime'))).toISOString();
+                        const endTimeISO = new Date().toISOString();
+                        const user = "{{ user.username }}";
+                        const filename = "{{ filename }}";
+
+                        const reportData = {
+                            user: user,
+                            filename: filename,
+                            startTime: startTimeISO,
+                            endTime: endTimeISO
+                        };
+
+                        // Send data to the backend to be logged
+                        navigator.sendBeacon("{% url 'generate_report' %}", JSON.stringify(reportData));
+
+                        // Clear session storage for the next review
+                        sessionStorage.removeItem('reviewStartTime');
+                        // Redirect to the new upload page
+                        window.location.href = "{% url 'upload_pdf' %}";
+                    });
+                }
+            }
+
+            // --- Revision Helper Toggle ---
+            const revisionHelperCard = document.querySelector('.revision-helper-card');
+            if (revisionHelperCard) {
+                const header = revisionHelperCard.querySelector('.revision-helper-header');
+                const toggleBtn = revisionHelperCard.querySelector('.toggle-revision-helper-btn');
+
+                header.addEventListener('click', function() {
+                    revisionHelperCard.classList.toggle('expanded');
+                    if (revisionHelperCard.classList.contains('expanded')) {
+                        toggleBtn.textContent = 'Hide';
+                    } else {
+                        toggleBtn.textContent = 'Show';
                     }
                 });
             }

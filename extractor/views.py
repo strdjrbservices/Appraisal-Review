@@ -1,38 +1,135 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.core.files.storage import FileSystemStorage
 from .services import extract_fields_from_pdf, FIELD_SECTIONS, SUBJECT_FIELDS
+from django.contrib.auth import login, logout, authenticate
+from django.contrib.auth import get_user_model
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import AuthenticationForm
+from django.contrib import messages
+from .forms import SignUpForm
+from asgiref.sync import sync_to_async
 from bs4 import BeautifulSoup
 from .comparison import compare_pdfs, extract_fields_from_html, compare_data_sets
+from django.views.decorators.csrf import csrf_exempt
 import fitz  # PyMuPDF
+from django.http import JsonResponse
 import re
+import asyncio
+import json
+
+def register_view(request):
+    if request.method == 'POST':
+        form = SignUpForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Registration successful! Please wait for an admin to approve your account.')
+            return redirect('login')
+    else:
+        form = SignUpForm()
+    return render(request, 'register.html', {'form': form})
+
+def login_view(request):
+    if request.method == 'POST':
+        form = AuthenticationForm(request, data=request.POST)
+        if form.is_valid():
+            username = form.cleaned_data.get('username')
+            password = form.cleaned_data.get('password')
+            user = authenticate(username=username, password=password)
+            if user is not None:
+                login(request, user)
+                return redirect('upload_pdf')
+            else: # The user is None
+                # The backend returns None for both bad passwords and unapproved users.
+                # We can provide a more specific message for unapproved users if we check their status.
+                user_exists = get_user_model().objects.filter(username=username).first()
+                if user_exists and hasattr(user_exists, 'profile') and not user_exists.profile.is_approved:
+                    messages.error(request, 'Your account has not been approved by an administrator yet. Please wait for approval.')
+                else:
+                    messages.error(request, 'Invalid username or password.')
+    form = AuthenticationForm()
+    return render(request, 'login.html', {'form': form})
+
+def logout_view(request):
+    logout(request)
+    messages.success(request, "You have been successfully logged out.")
+    return redirect('login')
 
 # The view to handle the initial PDF upload
+@login_required
 async def upload_pdf(request):
     if request.method == 'POST' and request.FILES.get('pdf_file'):
         pdf_file = request.FILES['pdf_file']
+        html_file = request.FILES.get('html_file') # Use .get() to make it optional
+        purchase_copy_file = request.FILES.get('purchase_copy_file')
+        engagement_letter_file = request.FILES.get('engagement_letter_file')
         fs = FileSystemStorage()
-        # Save the file to a temporary location
-        filename = fs.save(pdf_file.name, pdf_file)
-                
+
+        # Save PDF file
+        pdf_filename = await sync_to_async(fs.save)(pdf_file.name, pdf_file)
+        pdf_path = await sync_to_async(fs.path)(pdf_filename)
+
+        html_data = None
+        purchase_data = None
+        engagement_data = None
+
+        # Process HTML file only if it exists
+        if html_file:
+            html_filename = await sync_to_async(fs.save)(html_file.name, html_file)
+            html_path = await sync_to_async(fs.path)(html_filename)
+            # Extract data from the HTML file
+            html_data = await sync_to_async(_extract_from_html_file)(html_path)
+        
+        if purchase_copy_file:
+            purchase_filename = await sync_to_async(fs.save)(purchase_copy_file.name, purchase_copy_file)
+            purchase_path = await sync_to_async(fs.path)(purchase_filename)
+            # A simple text extraction might be enough for now
+            purchase_data = await extract_fields_from_pdf(purchase_path, 'contract')
+
+        if engagement_letter_file:
+            engagement_filename = await sync_to_async(fs.save)(engagement_letter_file.name, engagement_letter_file)
+            engagement_path = await sync_to_async(fs.path)(engagement_filename)
+            engagement_data = await extract_fields_from_pdf(engagement_path, 'addendum', custom_prompt="Extract the 'Appraisal Fee' or 'Total Fee' from this document.")
+
+        # Extract base information to show in the popup
+        base_info = await extract_fields_from_pdf(pdf_path, 'base_info')
+
         # Create display names for the buttons
-        sections_for_template = {key: key.replace('_', ' ').title() for key in FIELD_SECTIONS.keys()}
+        sections_for_template = {
+            key: key.replace('_', ' ').title() 
+            for key in FIELD_SECTIONS.keys() if key not in ['uniform_report', 'addendum', 'appraisal_id', 'additional_comments', 'base_info']
+        }
 
-        # Instead of extracting, render the new home page with section buttons
-        return render(request, 'home.html', {'filename': filename, 'sections': sections_for_template})
+        # Render the home page with section buttons and data from both files
+        context = {
+            'filename': pdf_filename, 
+            'sections': sections_for_template, 
+            'base_info': base_info, 
+            'html_data': html_data,
+            'purchase_data': purchase_data,
+            'engagement_data': engagement_data
+        }
+        return await sync_to_async(render)(request, 'home.html', context)
 
-    return render(request, 'upload.html')
+    return await sync_to_async(render)(request, 'upload.html')
 
-async def compare_pdfs_view(request):
+@login_required
+def compare_pdfs_upload_view(request):
+    """Handles the GET request to display the compare upload form."""
+    return render(request, 'compare_upload.html')
+
+@login_required
+async def compare_pdfs_process_view(request):
+    """Handles the POST request to process and compare two PDFs."""
     if request.method == 'POST' and request.FILES.get('pdf_file1') and request.FILES.get('pdf_file2'):
         pdf_file1 = request.FILES['pdf_file1']
         pdf_file2 = request.FILES['pdf_file2']
         fs = FileSystemStorage()
 
-        filename1 = fs.save(pdf_file1.name, pdf_file1)
-        filename2 = fs.save(pdf_file2.name, pdf_file2)
+        filename1 = await sync_to_async(fs.save)(pdf_file1.name, pdf_file1)
+        filename2 = await sync_to_async(fs.save)(pdf_file2.name, pdf_file2)
 
-        pdf1_path = fs.path(filename1)
-        pdf2_path = fs.path(filename2)
+        pdf1_path = await sync_to_async(fs.path)(filename1)
+        pdf2_path = await sync_to_async(fs.path)(filename2)
 
         comparison_results = await compare_pdfs(pdf1_path, pdf2_path)
 
@@ -41,9 +138,9 @@ async def compare_pdfs_view(request):
             'filename2': filename2,
             'results': comparison_results,
         }
-        return render(request, 'compare_results.html', context)
-
-    return render(request, 'compare_upload.html')
+        return await sync_to_async(render)(request, 'compare_results.html', context)
+    # Redirect to the upload page if it's not a POST request
+    return await sync_to_async(redirect)('compare_pdfs_upload')
 
 def _extract_from_html_file(file_path):
     """Extracts data from the HTML file using BeautifulSoup."""
@@ -144,6 +241,46 @@ async def _extract_from_pdf_file(file_path):
             return 'Refinance'
         return value
         
+    def determine_appraisal_type(pdf_path, appraisal_id_data):
+        """Determines the appraisal type by scanning headers and checking for add-ons."""
+        base_form = None
+        try:
+            doc = fitz.open(pdf_path)
+            if len(doc) > 0:
+                first_page_text = doc[0].get_text("text").lower()
+                if "uniform residential appraisal report" in first_page_text:
+                    base_form = "1004" # header as " Uniform Residential Appraisal Report"
+                elif "individual condominium unit appraisal report" in first_page_text: # The user requested "Individual Condominium Unit Appraisal Report File", this is close enough and more robust.
+                    base_form = "1073"
+                elif "multi family" in first_page_text or "multifamily" in first_page_text:
+                    base_form = "1025"
+            doc.close()
+        except Exception:
+            base_form = None # Fallback if PDF scanning fails
+
+        # Use the text from the specific field as a primary source for add-ons
+        # and a fallback for the base form.
+        field_text = get_data(appraisal_id_data, 'This Report is one of the following types:', '')
+        if not isinstance(field_text, str):
+            field_text = ""
+
+        add_ons = []
+        if '1007' in field_text or 'rent schedule' in field_text.lower() or 'str' in field_text.lower() or 'rental' in field_text.lower() or 'SINGLE FAMILY COMPARABLE RENT SCHEDULE' in field_text: # 1007, STR, rental
+            add_ons.append("1007")
+        if '216' in field_text or 'operating income' in field_text.lower():
+            add_ons.append("216")
+
+        if base_form and add_ons:
+            return f"{base_form} + {' + '.join(add_ons)}"
+        elif base_form:
+            return base_form
+        elif add_ons:
+            # If we only found add-ons, return them.
+            return " + ".join(add_ons)
+        
+        # Fallback to the original text if no keywords were found
+        return field_text if field_text else "Not Found"
+
     # Logic to extract Unit Number for Condos
     unit_number = "N/A"
     pdf_appraisal_type = get_data(appraisal_id_data, 'This Report is one of the following types:', '')
@@ -172,29 +309,36 @@ async def _extract_from_pdf_file(file_path):
         'Property Type': get_data(improvements_data, 'Type'),
         'Unit Number': unit_number,
         'Property Address': (
-            f"{get_data(subject_data, 'Property Address', '')} "
+            f"{get_data(subject_data, 'Property Address', '')}, "
             f"{get_data(subject_data, 'City', '')}, {get_data(subject_data, 'State', '')} "
             f"{get_data(subject_data, 'Zip Code', '')}"
         ).strip(),
         'Property County': get_data(subject_data, 'County'),
-        'Appraisal Type': pdf_appraisal_type,
+        'Appraisal Type': determine_appraisal_type(file_path, appraisal_id_data),
         'Assigned to Vendor(s)': get_data(certification_data, 'Name'),
         'UAD XML Report': 'N/A (Not in PDF)',
     }
 
     return mapped_data
 
-async def compare_html_pdf_view(request):
+@login_required
+def compare_html_pdf_upload_view(request):
+    """Handles the GET request to display the upload form."""
+    return render(request, 'compare_html_pdf_upload.html')
+
+@login_required
+async def compare_html_pdf_process_view(request):
+    """Handles the POST request to process and compare the files."""
     if request.method == 'POST' and request.FILES.get('pdf_file') and request.FILES.get('html_file'):
         pdf_file = request.FILES['pdf_file']
         html_file = request.FILES['html_file']
         fs = FileSystemStorage()
 
         # Save files
-        pdf_filename = fs.save(pdf_file.name, pdf_file)
-        html_filename = fs.save(html_file.name, html_file)
-        pdf_path = fs.path(pdf_filename)
-        html_path = fs.path(html_filename)
+        pdf_filename = await sync_to_async(fs.save)(pdf_file.name, pdf_file)
+        html_filename = await sync_to_async(fs.save)(html_file.name, html_file)
+        pdf_path = await sync_to_async(fs.path)(pdf_filename)
+        html_path = await sync_to_async(fs.path)(html_filename)
 
         # Extract data using the new helper functions
         html_data = _extract_from_html_file(html_path)
@@ -210,34 +354,192 @@ async def compare_html_pdf_view(request):
             'html_data': html_data,
             'pdf_data': pdf_data,
         }
-        return render(request, 'compare_html_pdf_results.html', context)
+        return await sync_to_async(render)(request, 'compare_html_pdf_results.html', context)
 
-    return render(request, 'compare_html_pdf_upload.html')
+    # Redirect to the upload page if it's not a POST request
+    return await sync_to_async(redirect)('compare_html_pdf_upload')
 
+@login_required
+def escalation_check_upload_view(request):
+    """Handles the GET request to display the escalation check upload form."""
+    return render(request, 'escalation_check_upload.html')
+
+@login_required
+async def escalation_check_process_view(request):
+    """Handles the POST request to process a PDF for escalation checks."""
+    if request.method == 'POST' and request.FILES.get('pdf_file') and request.FILES.get('html_file'):
+        pdf_file = request.FILES['pdf_file']
+        html_file = request.FILES['html_file']
+        purchase_copy_file = request.FILES.get('purchase_copy_file')
+        engagement_letter_file = request.FILES.get('engagement_letter_file')
+        fs = FileSystemStorage()
+
+        pdf_filename = await sync_to_async(fs.save)(pdf_file.name, pdf_file)
+        html_filename = await sync_to_async(fs.save)(html_file.name, html_file)
+
+        pdf_path = await sync_to_async(fs.path)(pdf_filename)
+        html_path = await sync_to_async(fs.path)(html_filename)
+
+        # Extract data from the HTML order form.
+        order_form_data = await sync_to_async(_extract_from_html_file)(html_path)
+
+        # --- New Structured Data Extraction ---
+        all_data_for_prompt = {
+            "order_form_data": order_form_data,
+            "appraisal_report_data": {},
+            "purchase_contract_data": {},
+            "engagement_letter_data": {}
+        }
+
+        # Extract from main appraisal PDF
+        # We can run these concurrently for better performance
+        tasks = [
+            extract_fields_from_pdf(pdf_path, 'subject'),
+            extract_fields_from_pdf(pdf_path, 'improvements'),
+            extract_fields_from_pdf(pdf_path, 'reconciliation'),
+            extract_fields_from_pdf(pdf_path, 'certification'),
+            extract_fields_from_pdf(pdf_path, 'appraisal_id'),
+            extract_fields_from_pdf(pdf_path, 'site'),
+            extract_fields_from_pdf(pdf_path, 'neighborhood'),
+            extract_fields_from_pdf(pdf_path, 'contract'),
+            extract_fields_from_pdf(pdf_path, 'sale_history'),
+        ]
+        results = await asyncio.gather(*tasks)
+        all_data_for_prompt["appraisal_report_data"] = {
+            'subject': results[0], 'improvements': results[1], 'reconciliation': results[2],
+            'certification': results[3], 'appraisal_id': results[4], 'site': results[5],
+            'neighborhood': results[6], 'contract': results[7], 'sale_history': results[8]
+        }
+
+        # Process optional files and extract structured data from them
+        if purchase_copy_file:
+            purchase_filename = await sync_to_async(fs.save)(purchase_copy_file.name, purchase_copy_file)
+            purchase_path = await sync_to_async(fs.path)(purchase_filename)
+            # Extract key fields from the purchase contract
+            all_data_for_prompt['purchase_contract_data'] = await extract_fields_from_pdf(purchase_path, 'contract')
+
+        if engagement_letter_file:
+            engagement_filename = await sync_to_async(fs.save)(engagement_letter_file.name, engagement_letter_file)
+            engagement_path = await sync_to_async(fs.path)(engagement_filename)
+            # A simple text extraction might be enough for an engagement letter to find the fee
+            # Or you could create a new 'engagement_letter' section in services.py
+            # For now, we'll pass it to a generic extraction.
+            all_data_for_prompt['engagement_letter_data'] = await extract_fields_from_pdf(engagement_path, 'addendum') # Re-using addendum for generic text
+
+        # --- End of New Structured Data Extraction ---
+
+        extracted_data = await extract_fields_from_pdf(pdf_path, 'escalation_check', custom_prompt=json.dumps(all_data_for_prompt))
+
+        context = {
+            'pdf_filename': pdf_filename,
+            'html_filename': html_filename,
+            'purchase_filename': purchase_copy_file.name if purchase_copy_file else None,
+            'engagement_filename': engagement_letter_file.name if engagement_letter_file else None,
+            'results': extracted_data,
+        }
+        return await sync_to_async(render)(request, 'escalation_check_results.html', context)
+
+    # Redirect to the upload page if it's not a POST request
+    return await sync_to_async(redirect)('escalation_check_upload')
 
 # The new view to handle extraction for a specific section
+@login_required
 async def extract_section(request, filename, section_name):
     fs = FileSystemStorage()
-    uploaded_file_path = fs.path(filename)
+    uploaded_file_path = await sync_to_async(fs.path)(filename)
 
-    if not fs.exists(uploaded_file_path):
-        return render(request, 'error.html', {'error_message': 'The requested file could not be found. Please upload it again.'})
+    if not await sync_to_async(fs.exists)(uploaded_file_path):
+        return await sync_to_async(render)(request, 'error.html', {'error_message': 'The requested file could not be found. Please upload it again.'})
 
     # Get custom prompt from POST data if it exists
     custom_prompt = request.POST.get('custom_prompt', None)
 
     # Handle the initial GET request for the custom analysis page
     if section_name == 'custom_analysis' and request.method == 'GET':
+        # Check for FHA case flag from query parameter
+        is_fha_case = request.GET.get('fha', 'false') == 'true'
+        
+        # Define the default prompt for FHA cases
+        fha_default_prompt = ""
+        if is_fha_case:
+            fha_default_prompt = """This is an FHA case. Please verify that all FHA-specific guidelines are met,
+1.	FHA case# should be on all pages of the report.
+2.	Comment stating that FHA is an additional intended user of the report.
+3.	Comment stating whether subject meets the 4000.1 handbook guidelines or not.
+4.	Please comment if attic/crawl space was inspected.
+5.	Hey guys, if there is a photo of the basement, attic or crawl space in the report, then do not send a request to comment if they inspected.
+6.	All amenities (patio, deck or porch) should be included on sketch.
+7.	If the subject has well and septic, the appraiser must comment on if the distances meet guidelines. If there is no comment, then a revision must be included to address if well and septic distances meet HUD guidelines.
+8.	Storage, barn, outbuilding interior photos
+9.	Remaining economic life is not mandatory."""
+
         sections_for_template = {key: key.replace('_', ' ').title() for key in FIELD_SECTIONS.keys()}
-        context = {'data': {}, 'section_title': 'Custom Document Analysis', 'filename': filename, 'section_key': section_name, 'sections': sections_for_template}
-        return render(request, 'result.html', context)
+        context = {'data': {}, 'section_title': 'Custom Document Analysis', 'filename': filename, 'section_key': section_name, 'sections': sections_for_template, 'custom_prompt': fha_default_prompt}
+
+        return await sync_to_async(render)(request, 'result.html', context)
 
     try:
         # Call the async extraction function with the specific section name
         extracted_data = await extract_fields_from_pdf(uploaded_file_path, section_name, custom_prompt=custom_prompt)
+
+        # --- Backend Validation for Neighborhood Description ---
+        if section_name == 'neighborhood' and 'error' not in extracted_data:
+            # Fetch subject data to determine FHA or Conventional case
+            subject_data = await extract_fields_from_pdf(uploaded_file_path, 'subject')
+            is_fha_case = False
+            if 'error' not in subject_data and subject_data:
+                fha_value = subject_data.get('FHA')
+                # A non-empty, non-placeholder FHA Case Number indicates an FHA case
+                if fha_value and fha_value not in ['N/A', 'null', '--', '']:
+                    is_fha_case = True
+
+            # Get the neighborhood description text
+            description = extracted_data.get("Neighborhood Description", "").lower()
+
+            # List of forbidden words for conventional loans
+            forbidden_words = [
+                "good", "average", "easy", "convenient", "conveniently", 
+                "low income", "desirable", "gentrified", "gentrification", 
+                "regentrified", "regentrification"
+            ]
+
+            # Find which forbidden words are in the description
+            found_words = [word for word in forbidden_words if word in description]
+
+            if found_words:
+                if is_fha_case:
+                    extracted_data['backend_validation'] = {'status': 'success', 'message': f"FHA Case: The description contains sensitive words ('{', '.join(found_words)}'), which is acceptable for FHA."}
+                else: # Conventional Case
+                    extracted_data['backend_validation'] = {'status': 'error', 'message': f"Conventional Case: The description contains forbidden words ('{', '.join(found_words)}'). This is not acceptable."}
+        # --- End of Backend Validation ---
         
+        # --- FHA Case Detection for Subject Section ---
+        is_fha_case = False
+        is_rental_form = False
+        if section_name == 'subject' and 'error' not in extracted_data:
+            subject_data = await extract_fields_from_pdf(uploaded_file_path, 'subject')
+            is_fha_case = False
+            if 'error' not in subject_data and subject_data:
+                fha_value = subject_data.get('FHA')
+                # A non-empty, non-placeholder FHA Case Number indicates an FHA case
+                if fha_value and fha_value not in ['N/A', 'null', '--', '']:
+                    is_fha_case = True
+            
+            # --- Rental Form (1007) Detection ---
+            appraisal_id_data = await extract_fields_from_pdf(uploaded_file_path, 'appraisal_id')
+            if 'error' not in appraisal_id_data and appraisal_id_data:
+                report_type = appraisal_id_data.get('This Report is one of the following types:', '').lower()
+                if '1007' in report_type or 'rent schedule' in report_type or 'rental' in report_type:
+                    is_rental_form = True
+
         # Create display names for the sidebar sections
-        sections_for_template = {key: key.replace('_', ' ').title() for key in FIELD_SECTIONS.keys()}
+        sections_for_template = {
+            key: key.replace('_', ' ').title() 
+            for key in FIELD_SECTIONS.keys() if key not in ['uniform_report', 'addendum', 'appraisal_id', 'additional_comments']
+        }
+
+        # Flag to show the revision helper for the subject section
+        show_revision_helper = section_name.lower() in ['subject', 'contract', 'neighborhood', 'site', 'improvements', 'sales_grid', 'sale_history', 'reconciliation', 'cost_approach', 'rental_grid']
 
         # Pass the dictionary to the result template
         context = {
@@ -247,7 +549,59 @@ async def extract_section(request, filename, section_name):
             'section_key': section_name,
             'sections': sections_for_template,
             'custom_prompt': custom_prompt,
+            'is_fha_case': is_fha_case,
+            'is_rental_form': is_rental_form,
+            'show_revision_helper': show_revision_helper,
         }
-        return render(request, 'result.html', context)
+        return await sync_to_async(render)(request, 'result.html', context)
     except Exception as e:
-        return render(request, 'error.html', {'error_message': str(e)})
+        return await sync_to_async(render)(request, 'error.html', {'error_message': str(e)})
+
+@login_required
+@csrf_exempt
+def generate_report(request):
+    """
+    Receives review session data via POST, logs it, and returns a JSON response.
+    This is an API-like view that is called from the client-side script.
+    """
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            # Use the authenticated user from the request, not from the client payload.
+            report_line = (
+                f"User: {request.user.username}, File: {data.get('filename')}, "
+                f"Start: {data.get('startTime')}, End: {data.get('endTime')}\n"
+            )
+            
+            # Append the report to a log file.
+            # Consider defining this path in settings.py for better management.
+            with open("review_report.log", "a") as report_file:
+                report_file.write(report_line)
+            
+            return JsonResponse({'status': 'success', 'message': 'Report generated.'}, status=200)
+
+        except (json.JSONDecodeError, KeyError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid data provided.'}, status=400)
+        except IOError:
+            # Log this server-side error for debugging.
+            return JsonResponse({'status': 'error', 'message': 'Could not write to report file.'}, status=500)
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)
+
+@login_required
+async def get_section_data_api(request, filename, section_name):
+    """
+    An API endpoint that extracts data for a specific section from a PDF 
+    and returns it as JSON.
+    """
+    fs = FileSystemStorage()
+    if not await sync_to_async(fs.exists)(filename):
+        return JsonResponse({'error': 'File not found.'}, status=404)
+
+    file_path = await sync_to_async(fs.path)(filename)
+
+    try:
+        extracted_data = await extract_fields_from_pdf(file_path, section_name)
+        return JsonResponse(extracted_data)
+    except Exception as e:
+        return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
