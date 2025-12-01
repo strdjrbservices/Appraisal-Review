@@ -9,7 +9,7 @@ from django.contrib import messages
 from .forms import SignUpForm
 from asgiref.sync import sync_to_async
 from bs4 import BeautifulSoup
-from .comparison import compare_pdfs, extract_fields_from_html, compare_data_sets
+from .comparison import compare_pdfs, compare_data_sets, compare_1004d
 from django.views.decorators.csrf import csrf_exempt
 import fitz  # PyMuPDF
 from django.http import JsonResponse
@@ -71,24 +71,34 @@ async def upload_pdf(request):
         html_data = None
         purchase_data = None
         engagement_data = None
+        html_filename_for_context = None
+        purchase_filename_for_context = None
+        engagement_filename_for_context = None
 
         # Process HTML file only if it exists
         if html_file:
             html_filename = await sync_to_async(fs.save)(html_file.name, html_file)
+            html_filename_for_context = html_file.name
             html_path = await sync_to_async(fs.path)(html_filename)
             # Extract data from the HTML file
             html_data = await sync_to_async(_extract_from_html_file)(html_path)
         
         if purchase_copy_file:
             purchase_filename = await sync_to_async(fs.save)(purchase_copy_file.name, purchase_copy_file)
+            purchase_filename_for_context = purchase_copy_file.name
             purchase_path = await sync_to_async(fs.path)(purchase_filename)
             # A simple text extraction might be enough for now
             purchase_data = await extract_fields_from_pdf(purchase_path, 'contract')
 
         if engagement_letter_file:
             engagement_filename = await sync_to_async(fs.save)(engagement_letter_file.name, engagement_letter_file)
+            engagement_filename_for_context = engagement_letter_file.name
             engagement_path = await sync_to_async(fs.path)(engagement_filename)
-            engagement_data = await extract_fields_from_pdf(engagement_path, 'addendum', custom_prompt="Extract the 'Appraisal Fee' or 'Total Fee' from this document.")
+            # Use 'report_details' for generic extraction from the engagement letter
+            extracted_engagement_data = await extract_fields_from_pdf(engagement_path, 'report_details', custom_prompt="Extract the 'Appraisal Fee' or 'Total Fee' from this document.")
+            # Ensure we have a valid dictionary to pass to the template
+            if 'error' not in extracted_engagement_data:
+                engagement_data = {'addendum': extracted_engagement_data}
 
         # Extract base information to show in the popup
         base_info = await extract_fields_from_pdf(pdf_path, 'base_info')
@@ -102,6 +112,9 @@ async def upload_pdf(request):
         # Render the home page with section buttons and data from both files
         context = {
             'filename': pdf_filename, 
+            'html_filename': html_filename_for_context,
+            'purchase_filename': purchase_filename_for_context,
+            'engagement_filename': engagement_filename_for_context,
             'sections': sections_for_template, 
             'base_info': base_info, 
             'html_data': html_data,
@@ -123,53 +136,204 @@ async def compare_pdfs_process_view(request):
     if request.method == 'POST' and request.FILES.get('pdf_file1') and request.FILES.get('pdf_file2'):
         pdf_file1 = request.FILES['pdf_file1']
         pdf_file2 = request.FILES['pdf_file2']
+        html_file = request.FILES.get('html_file')
+        purchase_copy_file = request.FILES.get('purchase_copy_file')
+        engagement_letter_file = request.FILES.get('engagement_letter_file')
         fs = FileSystemStorage()
 
         filename1 = await sync_to_async(fs.save)(pdf_file1.name, pdf_file1)
         filename2 = await sync_to_async(fs.save)(pdf_file2.name, pdf_file2)
-
         pdf1_path = await sync_to_async(fs.path)(filename1)
         pdf2_path = await sync_to_async(fs.path)(filename2)
 
-        comparison_results = await compare_pdfs(pdf1_path, pdf2_path)
+        # --- Process Optional Files ---
+        html_data = None
+        purchase_data = None
+        engagement_data = None
+
+        if html_file:
+            html_filename = await sync_to_async(fs.save)(html_file.name, html_file)
+            html_path = await sync_to_async(fs.path)(html_filename)
+            html_data = await sync_to_async(_extract_from_html_file)(html_path)
+
+        if purchase_copy_file:
+            purchase_filename = await sync_to_async(fs.save)(purchase_copy_file.name, purchase_copy_file)
+            purchase_path = await sync_to_async(fs.path)(purchase_filename)
+            purchase_data = await extract_fields_from_pdf(purchase_path, 'contract')
+
+        if engagement_letter_file:
+            engagement_filename = await sync_to_async(fs.save)(engagement_letter_file.name, engagement_letter_file)
+            engagement_path = await sync_to_async(fs.path)(engagement_filename)
+            extracted_engagement_data = await extract_fields_from_pdf(engagement_path, 'report_details', custom_prompt="Extract the 'Appraisal Fee' or 'Total Fee' from this document.")
+            if 'error' not in extracted_engagement_data:
+                engagement_data = {'addendum': extracted_engagement_data}
+        # --- End of Optional File Processing ---
+
+        comparison_results = await compare_pdfs(pdf1_path, pdf2_path, html_data, purchase_data, engagement_data)
 
         context = {
             'filename1': filename1,
             'filename2': filename2,
             'results': comparison_results,
+            'html_filename': html_file.name if html_file else None,
+            'purchase_filename': purchase_copy_file.name if purchase_copy_file else None,
+            'engagement_filename': engagement_letter_file.name if engagement_letter_file else None,
         }
         return await sync_to_async(render)(request, 'compare_results.html', context)
     # Redirect to the upload page if it's not a POST request
     return await sync_to_async(redirect)('compare_pdfs_upload')
 
+@login_required
+def d1004_file_review_upload_view(request):
+    """Handles the GET request to display the 1004D file review upload form."""
+    return render(request, 'd1004_file_review_upload.html')
+
+@login_required
+async def d1004_file_review_process_view(request):
+    """Handles the POST request to process and compare an original appraisal with a 1004D."""
+    if request.method == 'POST' and request.FILES.get('original_pdf') and request.FILES.get('d1004_pdf'):
+        original_pdf = request.FILES['original_pdf']
+        d1004_pdf = request.FILES['d1004_pdf']
+        html_file = request.FILES.get('html_file')
+        purchase_copy_file = request.FILES.get('purchase_copy_file')
+        fs = FileSystemStorage()
+
+        original_filename = await sync_to_async(fs.save)(original_pdf.name, original_pdf)
+        d1004_filename = await sync_to_async(fs.save)(d1004_pdf.name, d1004_pdf)
+
+        original_pdf_path = await sync_to_async(fs.path)(original_filename)
+        d1004_pdf_path = await sync_to_async(fs.path)(d1004_filename)
+
+        html_data = None
+        purchase_data = None
+        html_filename_for_context = None
+
+        if html_file:
+            html_filename = await sync_to_async(fs.save)(html_file.name, html_file)
+            html_filename_for_context = html_filename
+            html_path = await sync_to_async(fs.path)(html_filename)
+            html_data = await sync_to_async(_extract_from_html_file)(html_path)
+        
+        if purchase_copy_file:
+            purchase_filename = await sync_to_async(fs.save)(purchase_copy_file.name, purchase_copy_file)
+            purchase_path = await sync_to_async(fs.path)(purchase_filename)
+            purchase_data = await extract_fields_from_pdf(purchase_path, 'contract')
+
+        comparison_results = await compare_1004d(original_pdf_path, d1004_pdf_path, html_data, purchase_data)
+
+        # Add filenames to the results dictionary so they can be accessed in the template for the custom analysis form.
+        comparison_results['original_filename'] = original_filename
+        comparison_results['d1004_filename'] = d1004_filename
+
+        context = {
+            'results': comparison_results,
+            'has_html': html_data is not None,
+            'html_filename': html_filename_for_context
+        }
+        return await sync_to_async(render)(request, 'd1004_result.html', context)
+    return await sync_to_async(redirect)('d1004_file_review_upload')
+
+@login_required
+async def d1004_custom_analysis_view(request):
+    """
+    Handles custom analysis prompts for the 1004D review, using context from all uploaded files.
+    """
+    if request.method == 'POST':
+        fs = FileSystemStorage()
+        original_filename = request.POST.get('original_filename')
+        d1004_filename = request.POST.get('d1004_filename')
+        html_filename = request.POST.get('html_filename')
+        custom_prompt = request.POST.get('custom_prompt')
+
+        if not original_filename or not d1004_filename or not custom_prompt:
+            # Handle error: essential data missing
+            return await sync_to_async(redirect)('upload_pdf')
+
+        original_pdf_path = await sync_to_async(fs.path)(original_filename)
+        d1004_pdf_path = await sync_to_async(fs.path)(d1004_filename)
+
+        # Initialize the list of paths for analysis with the core PDF documents
+        pdf_paths_for_analysis = [original_pdf_path, d1004_pdf_path]
+
+        # 1. Extract HTML data if available to build context
+        html_data = None
+        if html_filename and await sync_to_async(fs.exists)(html_filename):
+            html_file_path = await sync_to_async(fs.path)(html_filename)
+            html_data = await sync_to_async(_extract_from_html_file)(html_file_path) # This extracts data for the prompt
+            # Add the HTML file to the list of documents to be analyzed by the AI
+            pdf_paths_for_analysis.append(html_file_path)
+
+        # 2. Re-run the initial 1004D comparison to get structured data for context, now including HTML data if present.
+        initial_comparison_results = await compare_1004d(original_pdf_path, d1004_pdf_path, html_data)
+
+        # 4. Call the AI for custom analysis, now passing all available documents.
+        # The AI will receive a prompt and two documents to analyze.
+        custom_analysis_results = await extract_fields_from_pdf(
+            pdf_paths=pdf_paths_for_analysis,
+            section_name='custom_analysis',
+            custom_prompt=(
+                f"User Query: '''{custom_prompt}'''\n\n"
+                "Analyze all provided documents (original appraisal, 1004D form, and HTML order form if present) to answer the user's query. "
+                "Use the following pre-processed JSON data as the primary source for your analysis and to cross-reference information. "
+                "Do not state that the HTML form was not provided if its data is present in the JSON below.\n"
+                f"Order Form Data: {json.dumps(html_data)}"
+            )
+        )
+
+        # Add the filename to the html_data so it can be passed back to the template context
+        # This is done after the AI call to not interfere with the prompt context
+        if html_data:
+            html_data['filename'] = html_filename
+
+
+        # 5. Render the results page again with the new analysis data
+        context = {
+            'results': initial_comparison_results,
+            'original_filename': original_filename,
+            'd1004_filename': d1004_filename,
+            'has_html': html_data is not None,
+            'html_filename': html_filename,
+            'custom_analysis_results': custom_analysis_results,
+            'custom_prompt': custom_prompt # Pass the prompt back to display it
+        }
+        return await sync_to_async(render)(request, 'd1004_result.html', context)
+
+    # Redirect if not a POST request
+    return await sync_to_async(redirect)('d1004_file_review_upload')
+
+
 def _extract_from_html_file(file_path):
     """Extracts data from the HTML file using BeautifulSoup."""
     data = {}
-    fields = ['Client/Lender Name', 'Lender Address', 'FHA Case Number',
-              'Transaction Type', 'AMC Reg. Number', 'Borrower (and Co-Borrower)',
-              'Property Type', 'Property Address', 'Property County',
-              'Appraisal Type', 'Assigned to Vendor(s)', 'UAD XML Report']
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             html_content = f.read()
 
         soup = BeautifulSoup(html_content, 'html.parser')
 
-        def get_text_safe(element_id, default="N/A"):
-            element = soup.find(id=element_id)
-            return element.get_text(strip=True) if element else default
+        def get_text_from_label(label_text, default="N/A"): 
+            """Finds a label by its text and returns the text of the associated info span."""
+            label_element = soup.find(lambda tag: tag.name == 'label' and label_text.lower() in tag.get_text().lower())
+            if label_element:
+                # Find the parent container and then the value span within it
+                parent_div = label_element.find_parent(class_='col-8')
+                if parent_div and parent_div.find_next_sibling(class_='col-16'):
+                    value_span = parent_div.find_next_sibling(class_='col-16').find('span', class_='view-label-info')
+                    if value_span:
+                        return value_span.get_text(strip=True)
+            return default
 
-        data['Client/Lender Name'] = get_text_safe('ctl00_cphBody_lblLender')
-        data['Lender Address'] = get_text_safe('ctl00_cphBody_lblLenderAddress')
-        data['FHA Case Number'] = get_text_safe('ctl00_cphBody_lblFHACaseNumber')
-        data['Transaction Type'] = get_text_safe('ctl00_cphBody_lblTransactionType')
-        data['AMC Reg. Number'] = get_text_safe('ctl00_cphBody_lblAMCRegistrationNumber')
-        data['Borrower (and Co-Borrower)'] = get_text_safe('ctl00_cphBody_lblBorrowerName')
-        data['Property Type'] = get_text_safe('ctl00_cphBody_lblPropertyType')
-        data['Property Address'] = get_text_safe('ctl00_cphBody_lblPropertyAddress')
-        data['Property County'] = get_text_safe('ctl00_cphBody_lblPropertyCounty')
-        data['Appraisal Type'] = get_text_safe('ctl00_cphBody_lblAppraisalType')
-        data['Assigned to Vendor(s)'] = get_text_safe('ctl00_cphBody_lblAssignedTo')
+        data['Client/Lender Name'] = get_text_from_label('Client Name')
+        data['Lender Address'] = get_text_from_label('Lender Address')
+        data['FHA Case Number'] = get_text_from_label('FHA Case Number')
+        data['Transaction Type'] = get_text_from_label('Transaction Type')
+        data['AMC Reg. Number'] = get_text_from_label('AMC Reg. Number')
+        data['Borrower (and Co-Borrower)'] = get_text_from_label('Borrower Name')
+        data['Property Type'] = get_text_from_label('Property Type')
+        data['Property Address'] = get_text_from_label('Property Address')
+        data['Property County'] = get_text_from_label('Property County')
+        data['Appraisal Type'] = get_text_from_label('Appraisal Type')
+        data['Assigned to Vendor(s)'] = get_text_from_label('Assigned to Vendor(s)')
 
         uad_xml_link = soup.find(id='ctl00_cphBody_lnkAppraisalXMLFile')
         data['UAD XML Report'] = uad_xml_link.get_text(strip=True) if uad_xml_link else "N/A"
@@ -177,7 +341,11 @@ def _extract_from_html_file(file_path):
     except FileNotFoundError:
         for field in fields:
             data[field] = "N/A (HTML File Error)"
-    except Exception:
+    except Exception as e:
+        fields = ['Client/Lender Name', 'Lender Address', 'FHA Case Number',
+              'Transaction Type', 'AMC Reg. Number', 'Borrower (and Co-Borrower)',
+              'Property Type', 'Property Address', 'Property County',
+              'Appraisal Type', 'Assigned to Vendor(s)', 'UAD XML Report']
         for field in fields:
              data[field] = "N/A (HTML Processing Error)"
     return data
@@ -383,6 +551,12 @@ async def escalation_check_process_view(request):
         # Extract data from the HTML order form.
         order_form_data = await sync_to_async(_extract_from_html_file)(html_path)
 
+        # --- New: Extract structured data from PDF for comparison ---
+        pdf_data_for_comparison = await _extract_from_pdf_file(pdf_path)
+
+        # --- New: Compare HTML data against PDF data ---
+        order_form_comparison_results = compare_data_sets(order_form_data, pdf_data_for_comparison)
+
         # --- New Structured Data Extraction ---
         all_data_for_prompt = {
             "order_form_data": order_form_data,
@@ -436,6 +610,7 @@ async def escalation_check_process_view(request):
             'purchase_filename': purchase_copy_file.name if purchase_copy_file else None,
             'engagement_filename': engagement_letter_file.name if engagement_letter_file else None,
             'results': extracted_data,
+            'order_form_comparison_results': order_form_comparison_results, # Add comparison results to context
         }
         return await sync_to_async(render)(request, 'escalation_check_results.html', context)
 
@@ -512,6 +687,64 @@ async def extract_section(request, filename, section_name):
                 else: # Conventional Case
                     extracted_data['backend_validation'] = {'status': 'error', 'message': f"Conventional Case: The description contains forbidden words ('{', '.join(found_words)}'). This is not acceptable."}
         # --- End of Backend Validation ---
+
+        # --- Backend Validation for Sale History ---
+        if section_name == 'sale_history' and 'error' not in extracted_data:
+            validations = []
+            
+            def is_empty(val):
+                return val is None or val in ['--', 'null', '']
+
+            # Rule 1: Check required fields in Research and Analysis
+            required_fields = [
+                "I ____ research the sale or transfer history of the subject property and comparable sales.(did/did not)",
+                "My research _____ reveal any prior sales or transfers of the subject property for the three years prior to the effective date of this appraisal.(did/did not)",
+                "Data Source(s) for subject property research",
+                "My research ______ reveal any prior sales or transfers of the comparable sales for the year prior to the date of sale of the comparable sale.(did/did not)",
+                "Data Source(s_for_comparable_sales_research)", # Adjusted key from services.py
+                "Analysis of prior sale or transfer history of the subject property and comparable sales",
+            ]
+            missing_fields = [field for field in required_fields if is_empty(extracted_data.get(field))]
+            if missing_fields:
+                validations.append({'status': 'error', 'message': f"The following required fields are empty: {', '.join(missing_fields)}."})
+            else:
+                validations.append({'status': 'success', 'message': "All required 'Research and Analysis' fields are filled."})
+
+            # Rule 2: "I ____ research..." must be "did"
+            research_performed = extracted_data.get("I ____ research the sale or transfer history of the subject property and comparable sales.(did/did not)")
+            if research_performed and str(research_performed).lower() != 'did':
+                validations.append({'status': 'error', 'message': f"'I ____ research...' must be 'did', but it is '{research_performed}'."})
+            elif research_performed:
+                 validations.append({'status': 'success', 'message': "Research was performed ('did')."})
+
+            # Rule 3: Conditional validation for Subject prior sale
+            subject_history_found = extracted_data.get("My research _____ reveal any prior sales or transfers of the subject property for the three years prior to the effective date of this appraisal.(did/did not)")
+            if subject_history_found and str(subject_history_found).lower() == 'did':
+                subject_data = extracted_data.get('subject', {})
+                if is_empty(subject_data.get('Date of Prior Sale/Transfer')) or is_empty(subject_data.get('Price of Prior Sale/Transfer')):
+                    validations.append({'status': 'error', 'message': "Report indicates a prior sale for the Subject, but 'Date' or 'Price' is missing in the grid."})
+                else:
+                    validations.append({'status': 'success', 'message': "Subject prior sale details are present as required."})
+
+            # Rule 4: Conditional validation for Comparables' prior sales
+            comp_history_found = extracted_data.get("My research ______ reveal any prior sales or transfers of the comparable sales for the year prior to the date of sale of the comparable sale.(did/did not)")
+            if comp_history_found and str(comp_history_found).lower() == 'did':
+                comparables_data = extracted_data.get('comparables', [])
+                at_least_one_comp_has_data = False
+                if comparables_data:
+                    for comp in comparables_data:
+                        if not is_empty(comp.get('Date of Prior Sale/Transfer')) and not is_empty(comp.get('Price of Prior Sale/Transfer')):
+                            at_least_one_comp_has_data = True
+                            break
+                
+                if not at_least_one_comp_has_data:
+                    validations.append({'status': 'error', 'message': "Report indicates prior sales for Comparables, but no comparable has both 'Date' and 'Price' filled in the grid."})
+                else:
+                    validations.append({'status': 'success', 'message': "At least one comparable has prior sale details as required."})
+
+            if validations:
+                extracted_data['backend_validation_list'] = validations
+        # --- End of Sale History Validation ---
         
         # --- FHA Case Detection for Subject Section ---
         is_fha_case = False
@@ -527,8 +760,8 @@ async def extract_section(request, filename, section_name):
             
             # --- Rental Form (1007) Detection ---
             appraisal_id_data = await extract_fields_from_pdf(uploaded_file_path, 'appraisal_id')
-            if 'error' not in appraisal_id_data and appraisal_id_data:
-                report_type = appraisal_id_data.get('This Report is one of the following types:', '').lower()
+            if appraisal_id_data and 'error' not in appraisal_id_data:
+                report_type = (appraisal_id_data.get('This Report is one of the following types:') or '').lower()
                 if '1007' in report_type or 'rent schedule' in report_type or 'rental' in report_type:
                     is_rental_form = True
 

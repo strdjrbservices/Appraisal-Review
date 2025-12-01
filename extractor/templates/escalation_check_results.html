@@ -1,120 +1,78 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}Escalation Check Results{% endblock %}
 
 {% block content %}
-<style>
-    .results-container {
-        max-width: 1000px;
-        margin: 2rem auto;
-        padding: 2rem;
-        background-color: #fff;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-    }
-    .results-container h2 {
-        margin-top: 0;
-        border-bottom: 1px solid #e5e7eb;
-        padding-bottom: 1rem;
-        margin-bottom: 1.5rem;
-    }
-    .file-info {
-        font-size: 0.9em;
-        color: #6b7280;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem;
-        margin-bottom: 2rem;
-        background-color: #f9fafb;
-        padding: 1rem;
-        border-radius: 6px;
-    }
-    .file-info strong {
-        color: #374151;
-    }
-    .file-info p {
-        margin: 0.25rem 0;
-    }
-    .results-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.95em;
-    }
-    .results-table th, .results-table td {
-        padding: 0.75rem 1rem;
-        text-align: left;
-        border-bottom: 1px solid #e5e7eb;
-        vertical-align: top;
-    }
-    .results-table th {
-        background-color: #f9fafb;
-        font-weight: 600;
-        color: #374151;
-    }
-    .results-table tr:last-child td {
-        border-bottom: none;
-    }
-    .status-passed {
-        background-color: #f0fdf4;
-        color: #166534;
-    }
-    .status-failed {
-        background-color: #fef2f2;
-        color: #991b1b;
-        font-weight: 500;
-    }
-    .status-na {
-        background-color: #f3f4f6;
-        color: #4b5563;
-    }
-    .error {
-        color: #dc2626;
-        background-color: #fef2f2;
-        border: 1px solid #fecaca;
-        padding: 16px;
-        border-radius: 6px;
-        font-weight: 500;
-    }
-</style>
-
-<div class="results-container">
-    <h2>Escalation Check Results</h2>
-    <div class="file-info">
-        <div>
-            <p><strong>Appraisal PDF:</strong> {{ pdf_filename }}</p>
-            <p><strong>Order Form HTML:</strong> {{ html_filename }}</p>
-            {% if purchase_filename %}
-                <p><strong>Purchase Copy:</strong> {{ purchase_filename }}</p>
-            {% endif %}
-            {% if engagement_filename %}
-                <p><strong>Engagement Letter:</strong> {{ engagement_filename }}</p>
-            {% endif %}
+<div class="main-content" style="padding: 20px;">
+    <div class="header-container">
+        <div class="header-main">
+            <h1>Full File Review Results</h1>
+            <p><strong>Appraisal:</strong> {{ pdf_filename }}</p>
+            <p><strong>Order Form:</strong> {{ html_filename }}</p>
+            {% if purchase_filename %}<p><strong>Purchase Contract:</strong> {{ purchase_filename }}</p>{% endif %}
+            {% if engagement_filename %}<p><strong>Engagement Letter:</strong> {{ engagement_filename }}</p>{% endif %}
         </div>
     </div>
 
-    {% if results.error %}
-        <p class="error">Error: {{ results.error }}</p>
-    {% else %}
-        <table class="results-table">
-            <thead>
-                <tr>
-                    <th style="width: 40%;">Check Description</th>
-                    <th style="width: 60%;">Finding</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for check, finding in results.items %}
-                <tr class="{% if 'Passed' in finding %}status-passed{% elif 'Failed' in finding %}status-failed{% else %}status-na{% endif %}">
-                    <td>{{ check|safe }}</td>
-                    <td>{{ finding }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% endif %}
+    <!-- Order Form vs Report Verification Section -->
+    <div class="results-card">
+        <div class="results-header">
+            <h3>Order Form vs. Report Verification</h3>
+            <button class="toggle-results-btn">Show</button>
+        </div>
+        <div class="results-content">
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Order Form Value</th>
+                        <th>Appraisal Report Value</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in order_form_comparison_results %}
+                    <tr class="{% if item.match %}match{% else %}mismatch{% endif %}">
+                        <td class="field-name">{{ item.field }}</td>
+                        <td>{{ item.html_value|default_if_none:"N/A" }}</td>
+                        <td>{{ item.pdf_value|default_if_none:"N/A" }}</td>
+                        <td class="status-cell">
+                            {% if item.match %}
+                                <span class="status-badge status-match">Match</span>
+                            {% else %}
+                                <span class="status-badge status-mismatch">Mismatch</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 
-    <div style="text-align: center; margin-top: 3rem;">
-        <a href="{% url 'escalation_check_upload' %}" style="color: #007bff; text-decoration: none;">Run another check</a>
+    <!-- Escalation Checks Section -->
+    <div class="results-card">
+        <div class="results-header">
+            <h3>Automated Escalation Checks</h3>
+            <button class="toggle-results-btn">Show</button>
+        </div>
+        <div class="results-content">
+            {% if results.error %}
+                <p class="error">Error: {{ results.error }}</p>
+            {% else %}
+                {% for category, checks in results.items %}
+                    <h4 class="escalation-category">{{ category }}</h4>
+                    <ul class="escalation-list">
+                        {% for check, finding in checks.items %}
+                            <li class="{% if 'Failed' in finding %}mismatch{% elif 'Passed' in finding %}match{% else %}info{% endif %}">
+                                <strong>{{ check }}:</strong> {{ finding }}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endfor %}
+            {% endif %}
+        </div>
     </div>
 </div>
 {% endblock %}

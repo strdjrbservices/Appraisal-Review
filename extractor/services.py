@@ -3,12 +3,15 @@ import json
 from django.conf import settings
 import logging # Import logging module
 from google.api_core import exceptions as google_exceptions
+import os
 import asyncio
-import time
 
 BASE_FIELD = [
     "APPRAISAL FORM TYPE (1004/1025/1004D/1073)",
-    "Additional Form (1007/216/Rental/STR)"
+    "Additional Form (1007/216/Rental/STR)",
+    "ANSI Standard Confirmation",
+    "Reasonable Exposure Time Comment",
+    "Prior Service Certification"
 ]
 
 # SUBJECT
@@ -180,7 +183,7 @@ RECONCILIATION_FIELDS = [
 COST_APPROACH_FIELDS = [
     # Header/Support Fields
     "Support for the opinion of site value (summary of comparable land sales or other methods for estimating site value)",
-    "ESTIMATED",
+    "ESTIMATED (REPRODUCTION / REPLACEMENT COST NEW)",
     "Source of cost data",
     "Quality rating from cost service",
     "Effective date of cost data",
@@ -192,7 +195,7 @@ COST_APPROACH_FIELDS = [
     "Depreciation",
     "Depreciated Cost of Improvements",
     "As-is Value of Site Improvements",
-    "Indicated Value By Cost Approach",
+    "Indicated Value By Cost Approach $",
     # Comments and Other Fields
     "Comments on Cost Approach (gross living area calculations, depreciation, etc.)",
     "Estimated Remaining Economic Life (HUD and VA only)",
@@ -233,7 +236,8 @@ IMAGE_FIELDS =[
 
 INCOME_APPROACH_FIELDS = [
     "Estimated Monthly Market Rent $",
-    "X Gross Rent Multiplier = $"
+    "X Gross Rent Multiplier = $",
+    "Indicated Value by Income Approach"
 ]
 
 # PUD INFORMATION
@@ -436,6 +440,28 @@ CLIENT_LENDER_REQUIREMENTS_FIELDS.extend([
     "As-is with ARV Report Condition (Futures Financial)",
     "Desktop Report Condition (Futures Financial)",
 ])
+
+# 1004D FORM
+D1004_FIELDS = [
+    "Property Address", "Unit #", "City", "State", "Zip Code",
+    "Legal Description", "County",
+    "Borrower",
+    "Contract Price $", "Date of Contract",
+    "Effective Date of Original Appraisal",
+    "Property Rights Appraised",
+    "Original Appraised Value $",
+    "Original Appraiser", "Company Name",
+    "Original Lender/Client", "Address",
+    "SUMMARY APPRAISAL UPDATE REPORT (checkbox)",
+    "HAS THE MARKET VALUE OF THE SUBJECT PROPERTY DECLINED SINCE THE EFFECTIVE DATE OF THE PRIOR APPRAISAL? (Yes/No)",
+    "My opinion of the market value of the subject property as of the effective date of this appraisal update is",
+    "CERTIFICATION OF COMPLETION (checkbox)",
+    "HAVE THE IMPROVEMENTS BEEN COMPLETED IN ACCORDANCE WITH THE REQUIREMENTS AND CONDITIONS STATED IN THE ORIGINAL APPRAISAL REPORT? (Yes/No)",
+    "If No, describe the impact on the opinion of market value",
+    "Date of Inspection (for Certification of Completion)",
+    "Date of Signature and Report",
+]
+
 CLIENT_LENDER_REQUIREMENTS_FIELDS.extend([
     # Champions Funding LLC
     "E&O Insurance Attached (Champions)",
@@ -458,33 +484,44 @@ CLIENT_LENDER_REQUIREMENTS_FIELDS.extend([
 ])
 
 # ESCALATION CHECK
-ESCALATION_CHECK_FIELDS = [
-    "The order form indicates Assignment Type as ‘Purchase’ however the report is marked on Refinance transaction, please verify.",
-    "The order form shows appraisal type as 1004+1007 however the report is completed on 1025, please advise.",
-    "The order form shows appraiser name as “Mitchell starc” however the report is completed by appraiser “Pat Cummins”, please advise",
-    "Per the photos, the subject has multiple repairs however the report made As-is, please advise.",
-    "Per the photos and comments, the subject has multiple repairs however the report made As-is, please advise.",
-    "The appraiser on the order form signs the supervisory appraiser section of the report, please advise.",
-    "We are not seeing the latest revision requests in this order, please advise. The lender/client name in the report is changed from “Easy Street Capital” to “National Loan Funder”.",
-    "The appraiser’s fee noted in the report $300 does not match with the engagement letter $400. Please advise",
-    'The comment in the Neighborhood section reads " The neighborhood is comprised primarily of single family residences in *average* condition.", Please advise.',
-    "The final value is higher than list price, purchase price and prior sale price, please advise.",
-    "The order form shows appraisal type as ‘1004D Final Inspection/Appraisal Update’ however the report shows ‘1004D Final Inspection’ only, please advise",
-    "The order form shows appraisal type as ‘1004D Appraisal Update’ however the report completed as ‘1004D Appraisal Update and Final Inspection’ both, please advise",
-    "On order form, Loan type noted as USDA however the appraisal type shows 1004 FHA, please advise the report is completed as USDA.",
-    "This one is marked as Illegal, please advise how to proceed",
-    "This is 1004 and the subject has 3 kitchens, please advise if we need a comment in the report addressing whether the additional kitchens are permitted or not.",
-    "Our records indicate the subject was inspected on 3/21/2025 however, the effective date reflects 12/11/2024. Please revise accordingly.",
-    "Final value is 10 % higher than unadjusted sales price, please advise.",
-    "In the sales grid adjustment drastically increase refer to the snap and advise.",
-    'If the subject location in the sales grid is marked as "Commercial," it should always be esclated.',
-    "Please address the appraised value being higher than the purchase price for the subject property.",
-    "Please address the increase in value since the subject's prior sale",
-    "If the subject address is same for any comps or rental comps then escalte it on group.",
-    'If the highest and best use is marked NO then escalate as: Highest and best use is marked NO, please refer the snap and advise',
-    'If physical deficiencies marked YES then report should be subject-to. If the report is as-is then escalate as: Physical deficiencies marked YES however the report made as-is, please advise.',
-    "Time adjustments provided. Please ensure detailed commentary is included on how adjustments were derived, per updated FANNIE guidelines."
-]
+ESCALATION_CHECK_FIELDS = {
+    "Order Form vs. Report Mismatches": [
+        "Verify Assignment Type matches between Order Form and Report.",
+        "Verify Appraisal Type matches between Order Form and Report.",
+        "Verify Appraiser Name matches between Order Form and Report.",
+        "Verify Lender/Client Name matches between Order Form and Report.",
+        "Verify Appraiser Fee matches between Engagement Letter and Report/Invoice."
+    ],
+    "Critical Report Conditions": [
+        "Check if 'Zoning Compliance' in the Site section is marked as 'Illegal'.",
+        "Check if 'Highest and Best Use' in the Site section is marked as 'No'.",
+        "Check if 'Physical Deficiencies' in the Improvements section is 'Yes' but the report is made 'As-Is' in Reconciliation.",
+        "Check if photos or comments indicate multiple repairs are needed, but the report is made 'As-Is'."
+    ],
+    "Value and Price Analysis": [
+        "Check if the final appraised value is more than 10% higher than the lowest unadjusted comparable sale price.",
+        "Check if the final appraised value is higher than the subject's list price, purchase price, and most recent prior sale price.",
+        "Check if the appraised value is significantly higher than the purchase price and if an explanation is provided.",
+        "Check if there has been a significant increase in value since the subject's prior sale and if an explanation is provided."
+    ],
+    "Sales Grid and Adjustments": [
+        "Check for any single adjustment in the sales grid that appears drastically large relative to the sale price.",
+        "Check if the subject's 'Location' in the sales grid is marked as 'Commercial'.",
+        "Check if any 'Date of Sale/Time' adjustments are present and if a detailed explanation based on market data is provided."
+    ],
+    "Property and Data Consistency": [
+        "Check if the subject property's address is also used as a comparable or rental property.",
+        "For a 1004 (Single Family) report, check if there is evidence of more than one kitchen and if its legality is discussed.",
+        "Verify the report's 'Effective Date' matches the 'Inspection Date' from the order form or other records.",
+        "Check if the appraiser listed on the order form signed as the 'Supervisory Appraiser' instead of the primary appraiser."
+    ],
+    "Loan and Form Type Compliance": [
+        "If the order form specifies a USDA loan, verify the report is not completed on an FHA form (e.g., 1004 FHA).",
+    ],
+    "Prohibited Language": [
+        "Search the 'Neighborhood Description' for the phrase 'average condition' in a non-FHA report."
+    ]
+}
 
 # consistancy
 consistancy = [
@@ -522,18 +559,23 @@ FIELD_SECTIONS = {
     "state_requirement": STATE_REQUIREMENT_FIELDS,
     "client_lender_requirements": CLIENT_LENDER_REQUIREMENTS_FIELDS,
     "escalation_check": ESCALATION_CHECK_FIELDS,
+    "d1004": D1004_FIELDS,
     "custom_analysis": CUSTOM_ANALYSIS_FIELDS,
 }
 
 logger = logging.getLogger(__name__)
 
-async def extract_fields_from_pdf(pdf_path, section_name: str, custom_prompt: str = None):
+async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: str = None):
     # Configure the client with a longer timeout to handle large PDF processing.
     # Set a 5-minute (300 seconds) timeout.
     client = genai.Client(api_key=settings.GOOGLE_API_KEY)
 
+    # Ensure pdf_paths is a list
+    if isinstance(pdf_paths, str):
+        pdf_paths = [pdf_paths]
+
     # Get the correct field list based on the section name
-    fields_to_extract = FIELD_SECTIONS.get(section_name.lower(), []) # No change here, just for context
+    fields_to_extract = FIELD_SECTIONS.get(section_name.lower(), [])
     # Allow sections with complex prompts even if their field list is a placeholder or used differently
     if not fields_to_extract and section_name.lower() not in ['sales_grid', 'sale_history', 'improvements', 'custom_analysis', 'client_lender_requirements', 'report_details']:
         return {"error": f"Invalid section name provided: {section_name}"}
@@ -550,10 +592,12 @@ async def extract_fields_from_pdf(pdf_path, section_name: str, custom_prompt: st
         1.  **Be Thorough:** Extract data for every field listed.
         2.  **Use Null for Missing Data:** If a field is not found, is not applicable, or has no value (e.g., '--', 'N/A', or blank), use `null` as its value. Do not invent data.
         3.  **Handle Complex Fields:**
-            *   For fields represented by checkboxes (e.g., "PUD"), if the checkbox is marked/selected, extract "Yes". If neither checkbox is selected, the value must be `No`.
-            *   For yes/no questions like "Offered for Sale in Last 12 Months", extract the "Yes" or "No" answer. The subsequent field "Report data source(s) used, offering price(s), and date(s)" should contain the corresponding explanation if the answer was "Yes". If the answer is "No", the explanation field should be `null`.
+            *   For fields "Occupant" if checkbox is marked/selected on 'Owner', 'Tenant', or 'Vacant',then extract 'Owner', 'Tenant', or 'Vacant'. 
+            *   For fields "PUD" if checkbox is marked/selected, then the fields "HOA $" and "HOA(per year/per month)" must be extracted. If "PUD" checkbox is unmarked/unselected, these HOA-related fields should be `blank`.
+            *   For fields "Assignment Type" if checkbox is marked/selected on 'Purchase Transaction', 'Refinance Transaction', or 'Other (describe)',then extract 'Purchase Transaction', 'Refinance Transaction', or 'Other (describe)'.
+            *   For yes/no questions like "Is the subject property currently offered for sale or has it been offered for sale in the twelve months prior to the effective date of this appraisal?", extract the "Yes" or "No" answer. 
+            *   The subsequent field "Report data source(s) used, offering price(s), and date(s)" should contain the corresponding explanation if the answer was "Yes". If the answer is "No", the explanation field should be `null`.
             *   For the "FHA" field, extract the FHA case number if it is present in the report. If no FHA number is found, the value must be `null`.
-            *   If "PUD" is marked as "Yes", then the fields "HOA $" and "HOA(per year/per month)" must be extracted. If "PUD" is "No", these HOA-related fields should be `blank`.
         **Fields to Extract:**
         {json.dumps(fields_to_extract, indent=2)}
 
@@ -574,37 +618,31 @@ async def extract_fields_from_pdf(pdf_path, section_name: str, custom_prompt: st
         }}
         """
     elif section_name.lower() == 'base_info':
-        prompt = f"""
-        You are an expert at identifying the types of forms included in a real estate appraisal report.
+        prompt = f"""You are an expert at identifying the main form type and key certification statements from a real estate appraisal report.
         Analyze the provided PDF document and extract the values for all fields listed below.
 
         Your output must be a single, valid JSON object where the keys are the field names and the values are the extracted data.
 
         **Instructions:**
         1.  **Be Thorough:** Extract data for every field listed.
-        2.  **Use Null for Missing Data:** If a field is not found, is not applicable, or has no value (e.g., '--', 'N/A', or blank), use `null` as its value. Do not invent data.
-        3.  **Handle Complex Fields:**
-            *   For fields represented by checkboxes (e.g., "PUD"), if the checkbox is marked/selected, extract "Yes". If neither checkbox is selected, the value must be `No`.
-            *   For yes/no questions like "Offered for Sale in Last 12 Months", extract the "Yes" or "No" answer. The subsequent field "Report data source(s) used, offering price(s), and date(s)" should contain the corresponding explanation if the answer was "Yes". If the answer is "No", the explanation field should be `null`.
-            *   For the "FHA" field, extract the FHA case number if it is present in the report. If no FHA number is found, the value must be `null`.
-            *   If "PUD" is marked as "Yes", then the fields "HOA $" and "HOA(per year/per month)" must be extracted. If "PUD" is "No", these HOA-related fields should be `blank`.
+        2.  **Use Null for Missing Data:** If a field is not found or its value cannot be determined, use `null` as its value.
+        3.  **Specific Field Instructions:**
+            *   **APPRAISAL FORM TYPE**: Identify the main form number (e.g., "1004", "1073", "1025", "1004D") from the report's title or headers.
+            *   **Additional Form**: Identify any add-on forms mentioned, such as "1007", "216", "Rent Schedule", or "STR". If none are found, the value should be "None".
+            *   **ANSI Standard Confirmation**: Look for a statement like "I did/did not measure..." and extract only "did" or "did not".
+            *   **Reasonable Exposure Time Comment**: Find the comment for "Reasonable Exposure Time" and extract the full text.
+            *   **Prior Service Certification**: Find the statement like "I have/have not performed services..." and extract only "have" or "have not".
+
         **Fields to Extract:**
         {json.dumps(fields_to_extract, indent=2)}
 
         **Example of the final JSON structure:**
         {{
-            "Property Address": "123 Main St",
-            "City": "Anytown",
-            "County": "Sample County",
-            "FHA": "123-4567890",
-            "State": "CA",
-            "Zip Code": "12345",
-            "Borrower": "John Doe",
-            "Assignment Type": "Purchase Transaction",
-            "Offered for Sale in Last 12 Months": "No",
-            "Report data source(s) used, offering price(s), and date(s)": null,
-            "PUD": "Yes",
-            "...": "..." 
+            "APPRAISAL FORM TYPE (1004/1025/1004D/1073)": "1004",
+            "Additional Form (1007/216/Rental/STR)": "1007/Rental",
+            "ANSI Standard Confirmation": "did",
+            "Reasonable Exposure Time Comment": "The reasonable exposure time is estimated to be under 3 months.",
+            "Prior Service Certification": "have not"
         }}
         """
     elif section_name.lower() == 'sale_history':
@@ -752,9 +790,9 @@ async def extract_fields_from_pdf(pdf_path, section_name: str, custom_prompt: st
         1.  **Be Thorough:** Extract data for every field listed. 
         2.  **Use Null for Missing Data:** If a field is not found, is not applicable, or has no value (e.g., '--', 'N/A', or blank), use `null` as its value. Do not invent data.
         3.  **Handle Complex Fields:**
-            *   For the field "I _____ analyze the contract for sale for the subject purchase transaction.", find the checkbox for "did" or "did not". Extract only the selected word ("did" or "did not"). If neither checkbox is selected, the value must be `null`.
+            *   For the field "I _____ analyze the contract for sale for the subject purchase transaction.", if the checkbox is marked/selected as "did" or "did not", extract only the selected word ("did" or "did not"). If neither checkbox is selected, the value must be `null`.
             *   For the separate field "Explain the results of the analysis of the contract for sale or why the analysis was not performed.", extract the full text explanation. If the analysis "did not" happen, this field should contain the reason why. If it "did" happen, it should contain the results.
-            *   For yes/no questions (like those ending in "(Yes/No)"), identify which option is selected (e.g., by a checkmark or 'X') and extract only the word "Yes" or "No".
+            *   For yes/no questions like "Is the property seller the owner of public record?(Yes/No)" and "Is there any financial assistance (loan charges, sale concessions, gift or downpayment assistance, etc.) to be paid by any party on behalf of the borrower?(Yes/No)", if the checkbox is marked/selected as "Yes" or "No", extract only the selected word ("Yes" or "No"). If neither checkbox is selected, the value must be `null`.
  
         **Fields to Extract:**
         {json.dumps(fields_to_extract, indent=2)}
@@ -997,7 +1035,7 @@ async def extract_fields_from_pdf(pdf_path, section_name: str, custom_prompt: st
         Your output must be a single, valid JSON object where the keys are the field names and the values are the extracted data.
 
         **Instructions:**
-        1.  **Be Thorough:** Extract data for every field listed. This includes supporting text fields, the main cost calculation table, and additional comments.
+        1.  **Be Thorough:** Extract data for every field listed. This includes supporting text fields, the main cost calculation table, and additional comments. The field "ESTIMATED (REPRODUCTION / REPLACEMENT COST NEW)" is a checkbox, so extract the selected option (e.g., "REPRODUCTION" or "REPLACEMENT").
         2.  **Use Null for Missing Data:** If a field is not found, is not applicable, or has no value (e.g., '--', 'N/A', or is blank), use `null` as its value. Do not invent data.
         3.  **Handle Monetary Values:** For fields representing costs or values (e.g., "Opinion of Site Value", "Dwelling", "Indicated Value By Cost Approach"), extract the full monetary value, including any currency symbols or commas (e.g., "$120,000").
         4.  **Handle Descriptive Text:** For descriptive fields (e.g., "Support for the opinion of site value...", "Comments on Cost Approach..."), extract the complete text content.
@@ -1009,7 +1047,7 @@ async def extract_fields_from_pdf(pdf_path, section_name: str, custom_prompt: st
         **Example of the final JSON structure:**
         {{
             "Support for the opinion of site value (summary of comparable land sales or other methods for estimating site value)": "Based on analysis of three comparable land sales in the subject's market area.",
-            "ESTIMATED": "ESTIMATED",
+            "ESTIMATED (REPRODUCTION / REPLACEMENT COST NEW)": "REPLACEMENT",
             "Source of cost data": "Marshall & Swift",
             "Quality rating from cost service": "Average",
             "Effective date of cost data": "01/2024",
@@ -1020,7 +1058,7 @@ async def extract_fields_from_pdf(pdf_path, section_name: str, custom_prompt: st
             "Depreciation": "$50,000",
             "Depreciated Cost of Improvements": "$425,000",
             "As-is Value of Site Improvements": "$10,000",
-            "Indicated Value By Cost Approach": "$535,000",
+            "Indicated Value By Cost Approach $": "535,000",
             "Comments on Cost Approach (gross living area calculations, depreciation, etc.)": "Depreciation estimated using the age-life method. GLA calculations are consistent with the building sketch.",
             "Estimated Remaining Economic Life (HUD and VA only)": "50 Years"
         }}
@@ -1028,22 +1066,23 @@ async def extract_fields_from_pdf(pdf_path, section_name: str, custom_prompt: st
     elif section_name.lower() == 'custom_analysis':
         if not custom_prompt:
             return {} # Return empty dict if no prompt; view handles rendering the form page.
-        prompt = f"""You are an expert AI assistant specializing in real estate appraisal report analysis. A user has provided a PDF document and a specific query.
-        Analyze the entire PDF document thoroughly to answer the user's query.
+        prompt = f"""You are an expert AI assistant specializing in real estate appraisal report analysis.
+        You have been provided with one or more documents (like an original appraisal, a 1004D, an order form, etc.) and a specific query from a user.
+        Analyze all provided documents and context thoroughly to answer the user's query.
 
         **User's Query:**
         "{custom_prompt}"
 
         **Your Task:**
-        Provide a structured and comprehensive answer to the user's query based on the content of the PDF.
+        Provide a structured and comprehensive answer to the user's query based on the content of all provided documents.
         Format your response as a single, valid JSON object with the following keys:
 
         1.  `"query_summary"`: A brief, one-sentence summary of the user's original query.
         2.  `"findings"`: A JSON array of objects. Each object should represent a specific data point or piece of evidence found in the document that relates to the query. Each object in the array should have these keys:
             *   `"finding_title"`: A short, descriptive title for the finding (e.g., "GLA in Improvements Section", "Comparable 1 Address").
             *   `"finding_detail"`: The specific data or text extracted from the document (e.g., "1,850 sq. ft.", "123 Oak St").
-            *   `"source_location"`: The section or page number where this information was found (e.g., "Improvements Section, Page 3", "Sales Grid").
-        3.  `"analysis_summary"`: A short summary that synthesizes the findings and directly answers the user's query as corrcted or not corrected, addressed or not addressed. Give reference of addedum page where comment is present along with section where it is corrected.Also highlight any deviation with respect to corrected revision if you disagree.
+            *   `"source_location"`: The section, page number, or document name where this information was found (e.g., "Improvements Section, Page 3", "Sales Grid in original_appraisal.pdf").
+        3.  `"analysis_summary"`: A concise summary that synthesizes the findings and directly answers the user's query. State whether the issue is "Corrected", "Not Corrected", "Addressed", or "Not Addressed". If corrected or addressed, reference the addendum page or section where the change is present. Highlight any deviations or disagreements you have with the provided information.
 
         **Example for query "Check GLA consistency":**
         {{
@@ -1067,13 +1106,16 @@ async def extract_fields_from_pdf(pdf_path, section_name: str, custom_prompt: st
         # This is a two-step process. First, we need to get the state.
         # We will make a preliminary, quick call to get only the state from the subject section.
         state_prompt = "Extract only the property's state from the 'Subject' section of the report. Return a single JSON object with one key, 'State'. Example: {\"State\": \"CA\"}"
+        pdf_path = pdf_paths[0] if pdf_paths else None
         try:
             # Use asyncio.to_thread for the synchronous client call within the async function
-            prelim_file = await asyncio.to_thread(client.files.upload, file=pdf_path)
-            while prelim_file.state.name == "PROCESSING":
-                await asyncio.sleep(5)
-                prelim_file = await asyncio.to_thread(client.files.get, name=prelim_file.name)
-            
+            if pdf_path and os.path.exists(pdf_path):
+                prelim_file = await asyncio.to_thread(client.files.upload, file=pdf_path)
+                while prelim_file.state.name == "PROCESSING":
+                    await asyncio.sleep(5)
+                    prelim_file = await asyncio.to_thread(client.files.get, name=prelim_file.name)
+            else:
+                return {"error": "PDF file for state extraction not found."}
             if prelim_file.state.name != "ACTIVE":
                  return {"error": f"File processing failed for state extraction. State: {prelim_file.state.name}"}
 
@@ -1818,6 +1860,37 @@ async def extract_fields_from_pdf(pdf_path, section_name: str, custom_prompt: st
             "...": "..."
         }}
         """
+    elif section_name.lower() == 'd1004':
+        prompt = f"""
+        You are an expert at extracting information from appraisal update and completion reports, specifically Form 1004D.
+        Analyze the provided PDF document and extract the values for all fields listed below.
+
+        Your output must be a single, valid JSON object where the keys are the field names and the values are the extracted data.
+
+        **Instructions:**
+        1.  **Be Thorough:** Extract data for every field listed.
+        2.  **Use Null for Missing Data:** If a field is not found, is not applicable, or has no value (e.g., '--', 'N/A', or blank), use `null` as its value.
+        3.  **Handle Checkboxes:**
+            *   For fields like "SUMMARY APPRAISAL UPDATE REPORT (checkbox)" and "CERTIFICATION OF COMPLETION (checkbox)", if the box is checked, extract "Yes". If it is not checked, extract "No".
+        4.  **Handle Yes/No Questions:**
+            *   For questions like "HAS THE MARKET VALUE... DECLINED..." and "HAVE THE IMPROVEMENTS BEEN COMPLETED...", extract the "Yes" or "No" answer.
+            *   If the answer to "HAVE THE IMPROVEMENTS BEEN COMPLETED..." is "No", you must extract the explanation into the "If No, describe the impact on the opinion of market value" field. If the answer is "Yes", this field should be `null`.
+
+        **Fields to Extract:**
+        {json.dumps(fields_to_extract, indent=2)}
+
+        **Example of the final JSON structure:**
+        {{
+            "Property Address": "123 Main St",
+            "Original Appraised Value $": "500,000",
+            "SUMMARY APPRAISAL UPDATE REPORT (checkbox)": "Yes",
+            "HAS THE MARKET VALUE OF THE SUBJECT PROPERTY DECLINED SINCE THE EFFECTIVE DATE OF THE PRIOR APPRAISAL? (Yes/No)": "No",
+            "CERTIFICATION OF COMPLETION (checkbox)": "No",
+            "HAVE THE IMPROVEMENTS BEEN COMPLETED IN ACCORDANCE WITH THE REQUIREMENTS AND CONDITIONS STATED IN THE ORIGINAL APPRAISAL REPORT? (Yes/No)": null,
+            "If No, describe the impact on the opinion of market value": null,
+            "...": "..."
+        }}
+        """
     else:
         prompt = f"""
         You are an expert at extracting information from appraisal reports.
@@ -1831,31 +1904,37 @@ async def extract_fields_from_pdf(pdf_path, section_name: str, custom_prompt: st
         """
     
 
+    uploaded_files_for_prompt = []
     try:
-        # Use asyncio.to_thread to run synchronous code in an async function
-        uploaded_file = await asyncio.to_thread(
-            client.files.upload,
-            file=pdf_path
-        )
+        # Upload all provided PDF files
+        for path in pdf_paths:
+            if not os.path.exists(path):
+                logger.warning(f"File not found during extraction: {path}")
+                continue
+            
+            uploaded_file = await asyncio.to_thread(
+                client.files.upload,
+                file=path
+            )
+            uploaded_files_for_prompt.append(uploaded_file)
 
-        # Wait for the file to be active.
-        while uploaded_file.state.name == "PROCESSING":
-            logger.info(f"Waiting for file {uploaded_file.name} to be processed...")
-            # Use asyncio.sleep in an async function
-            await asyncio.sleep(10)
-            # Fetch the latest status of the file.
-            uploaded_file = await asyncio.to_thread(client.files.get, name=uploaded_file.name)
+        # Wait for all files to be active
+        for i, uploaded_file in enumerate(uploaded_files_for_prompt):
+            while uploaded_file.state.name == "PROCESSING":
+                logger.info(f"Waiting for file {uploaded_file.name} to be processed...")
+                await asyncio.sleep(10)
+                uploaded_file = await asyncio.to_thread(client.files.get, name=uploaded_file.name)
+                uploaded_files_for_prompt[i] = uploaded_file # Update the list with the new status
 
-        if uploaded_file.state.name != "ACTIVE":
-            logger.error(f"File {uploaded_file.name} is not in an ACTIVE state. Current state: {uploaded_file.state.name}")
-            return {"error": f"File processing failed. The file is in state: {uploaded_file.state.name}"}
-
-        logger.info(f"File {uploaded_file.name} is now ACTIVE and ready for use.")
+            if uploaded_file.state.name != "ACTIVE":
+                logger.error(f"File {uploaded_file.name} is not in an ACTIVE state. Current state: {uploaded_file.state.name}")
+                return {"error": f"File processing failed for {uploaded_file.name}. State: {uploaded_file.state.name}"}
+            logger.info(f"File {uploaded_file.name} is now ACTIVE.")
 
         response = await asyncio.to_thread(
             client.models.generate_content,
             model="gemini-2.5-flash",
-            contents=[uploaded_file, prompt],
+            contents=[*uploaded_files_for_prompt, prompt],
         )
 
         # The model's response text should be a JSON string. We parse it into a Python dict.

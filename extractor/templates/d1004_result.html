@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+
+{% load dict_helpers %}
+{% block title %}1004D File Review Results{% endblock %}
+
+{% block content %}
+<div class="results-container">
+    <h1>1004D File Review Results</h1>
+
+    {% if results.error %}
+        <div class="error-message">
+            <p><strong>Error:</strong> {{ results.error }}</p>
+        </div>
+    {% else %}
+        <div class="file-info">
+            <p><strong>Original Appraisal:</strong> {{ results.original_filename|default:"N/A" }}</p>
+            <p><strong>1004D Form:</strong> {{ results.d1004_filename|default:"N/A" }}</p>
+            {% if has_html and results.html_filename and results.html_filename != 'N/A' %}
+            <p><strong>HTML Order Form:</strong> {{ results.html_filename }}</p>
+            {% endif %}
+        </div>
+
+        <table class="d1004-result-table">
+            <tbody>
+                {% for item in results.checks %}
+                <tr>
+                    <td><strong>{{ item.check }}</strong></td>
+                    <td><span class="status-{{ item.status }}">{{ item.status }}</span></td>
+                    <td>{{ item.message }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="custom-analysis-section" style="display: flex; gap: 2rem; margin-top: 2rem;">
+            <div style="flex: 1;">
+                <h2>Custom Document Analysis</h2>
+                <div class="analysis-card">
+                    <p>Enter a question or instruction below to perform a custom analysis on the uploaded documents.</p>
+                    <form action="{% url 'd1004_custom_analysis' %}" method="post" id="custom-analysis-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="original_filename" value="{{ results.original_filename }}">
+                        <input type="hidden" name="d1004_filename" value="{{ results.d1004_filename }}">
+                        {% if has_html and results.html_filename and results.html_filename != 'N/A' %}
+                        <input type="hidden" name="html_filename" value="{{ results.html_filename }}">
+                        {% endif %}
+                        <textarea name="custom_prompt" placeholder="e.g., 'Are there any discrepancies in the borrower name across all documents?'">{% if custom_prompt %}{{ custom_prompt }}{% else %}Order Form (HTML) vs Appraisal Form (PDF)
+1. Verify Lender/Client Name and Address match between 1004D (Signature) and HTML.
+2. Verify Borrower Name and Address match between HTML and 1004D (Subject & Certification).
+3. Verify Appraiser Name matches between HTML and 1004D (Certification).
+ 
+1004D Form (PDF) vs Appraisal Form (PDF)
+1. Confirm all fields in the 1004D Subject section are filled.
+2. Compare 'Contract Price' and 'Date of Contract' from 1004D to the OA report's contract section.
+3. Compare 'Effective Date' and 'Original Appraised Value' from 1004D to the OA report.
+4. Compare 'Original Appraiser' and 'Lender/Client' from 1004D to the OA report.
+5. Verify logic for "Summary Appraisal Update Report" section: If checked, "Market Value Declined" question must be answered. If 'Yes', a new value must be present.
+6. Verify logic for "Certification of Completion" section: If checked, "Improvements Completed" question must be answered. Inspection date in signature is mandatory.
+7. Confirm presence of 'Subject Street, front' photo, 'E&O and license', and 'Subject photo addendum' (if completion is certified) in the 1004D.{% endif %}</textarea>
+                        <button type="submit" class="btn-submit">Run Custom Analysis</button>
+                    </form>
+                </div>
+            </div>
+
+            <div style="flex: 1;">
+                <h2>Analysis Results</h2>
+                {% if custom_analysis_results %}
+                <div class="custom-analysis-results">
+                    {% if custom_analysis_results.error %}
+                        <div class="error-message">
+                            <p><strong>Custom Analysis Error:</strong> {{ custom_analysis_results.error }}</p>
+                        </div>
+                    {% else %}
+                        <div class="query-display">
+                            <p><strong>Your Query:</strong></p>
+                            <p><em>{{ custom_prompt }}</em></p>
+                        </div>
+
+                        <div class="custom-analysis-summary">
+                            <p><strong>Analysis Summary:</strong></p>
+                            <p>{{ custom_analysis_results.analysis_summary }}</p>
+                        </div>
+
+                        {% if custom_analysis_results.findings %}
+                            <h4 style="margin-top: 30px;">Findings:</h4>
+                            <table class="findings-table">
+                                <thead>
+                                    <tr>
+                                        <th>Finding</th>
+                                        <th>Detail</th>
+                                        <th>Source Location</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for finding in custom_analysis_results.findings %}
+                                    <tr><td>{{ finding.finding_title }}</td><td>{{ finding.finding_detail }}</td><td>{{ finding.source_location }}</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        {% else %}
+                            <p>No specific findings were extracted for this query.</p>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                {% else %}
+                    <div class="placeholder-text" style="border: 2px dashed #e5e7eb; border-radius: 8px; padding: 2rem; text-align: center; color: #6b7280;">
+                        <p>Your analysis results will appear here.</p>
+                    </div>
+                {% endif %}
+            </div>
+            </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('custom-analysis-form');
+    if (form) {
+        form.addEventListener('submit', function() {
+            const overlay = document.getElementById('loader-overlay');
+            if(overlay) {
+                overlay.style.display = 'flex';
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

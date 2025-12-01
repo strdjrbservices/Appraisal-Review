@@ -3,135 +3,27 @@
 {% block title %}Verify Report vs. Order Form{% endblock %}
 
 {% block content %}
-<style>
-    #upload-form {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 2rem 3rem;
-        border-radius: 15px;
-        max-width: 650px;
-        margin: 50px auto;
-        background-color: #ffffff;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        text-align: center;
-    }
-
-    .header-logout {
-        position: absolute;
-        top: 20px;
-        right: 20px;
-        font-size: 0.9em;
-    }
-
-    #upload-form h2 {
-        margin-top: 0;
-        margin-bottom: 1.5rem;
-        color: #333;
-        font-weight: 600;
-    }
-
-    .file-upload-container {
-        display: flex;
-        gap: 1.5rem;
-        width: 100%;
-        margin-bottom: 1.5rem;
-    }
-
-    .file-drop-zone {
-        border: 2px dashed #d1d5db;
-        border-radius: 12px;
-        padding: 2rem;
-        width: 50%;
-        text-align: center;
-        cursor: pointer;
-        transition: border-color 0.3s, background-color 0.3s;
-    }
-
-    .file-drop-zone:hover, .file-drop-zone.dragover {
-        background-color: #f9fafb;
-        border-color: #3b82f6;
-    }
-
-    .file-drop-zone .drop-zone-text {
-        color: #6b7280;
-        font-weight: 500;
-    }
-
-    .file-drop-zone .browse-link {
-        color: #3b82f6;
-        font-weight: 600;
-    }
-
-    input[type="file"] {
-        display: none;
-    }
-
-    .button-container {
-        display: flex;
-        gap: 1rem;
-        justify-content: center;
-        width: 100%;
-    }
-
-    .btn {
-        border: none;
-        padding: 10px 25px;
-        cursor: pointer;
-        color: white;
-        border-radius: 8px;
-        font-size: 1em; /* Ensure consistent font size */
-        text-decoration: none; /* For <a> tags styled as buttons */
-        display: inline-flex; /* For vertical alignment */
-        align-items: center;
-        justify-content: center;
-        font-weight: 600;
-        transition: background-color 0.2s ease-in-out;
-        background-color: #007bff;
-    }
-
-    .btn:hover {
-        background-color: #0056b3;
-    }
-
-    .btn-secondary {
-        background-color: #6c757d;
-        color: white;
-    }
-
-    .btn-secondary:hover {
-        background-color: #5a6268;
-    }
-
-    .file-name {
-        color: #1f2937;
-        font-weight: 500;
-        margin-top: 1rem;
-        display: block;
-        font-size: 0.9em;
-        word-break: break-all;
-    }
-</style>
-
 <div class="header-logout">
     {% if user.is_authenticated %}
-        Welcome, {{ user.username }} | <a href="{% url 'logout' %}">Logout</a>
+    Welcome, {{ user.username }} | <a href="{% url 'logout' %}">Logout</a>
     {% endif %}
 </div>
 
 <form id="upload-form" action="{% url 'compare_html_pdf_process' %}" method="post" enctype="multipart/form-data">
     <h2>Verify Report with Order Form</h2>
-    <p style="margin-top:-1rem; margin-bottom: 2rem; color: #6b7280;">Upload an appraisal PDF and its corresponding HTML export to verify data consistency.</p>
+    <p style="margin-top:-1rem; margin-bottom: 2rem; color: #6b7280;">Upload an appraisal PDF and its corresponding HTML
+        export to verify data consistency.</p>
     {% csrf_token %}
 
     <div class="file-upload-container">
         <div id="file-drop-zone1" class="file-drop-zone">
-            <p class="drop-zone-text"><strong>Appraisal PDF:</strong> Drag & Drop or <span class="browse-link">browse</span></p>
+            <p class="drop-zone-text"><strong>Appraisal PDF:</strong> Drag & Drop or <span
+                    class="browse-link">browse</span></p>
             <span id="file-name1" class="file-name"></span>
         </div>
         <div id="file-drop-zone2" class="file-drop-zone">
-            <p class="drop-zone-text"><strong>HTML Report:</strong> Drag & Drop or <span class="browse-link">browse</span></p>
+            <p class="drop-zone-text"><strong>HTML Report:</strong> Drag & Drop or <span
+                    class="browse-link">browse</span></p>
             <span id="file-name2" class="file-name"></span>
         </div>
     </div>
@@ -150,7 +42,7 @@
 {% block extra_js %}
 <script>
     // Re-using the same JS from the other compare page for drag-and-drop functionality
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         function setupDragAndDrop(dropZoneId, fileInputId, fileNameId) {
             const dropZone = document.getElementById(dropZoneId);
             const fileInput = document.getElementById(fileInputId);

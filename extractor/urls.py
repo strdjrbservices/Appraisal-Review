@@ -16,10 +16,13 @@ urlpatterns = [
     path('generate-report/', views.generate_report, name='generate_report'),
     path('escalation-check/', views.escalation_check_upload_view, name='escalation_check_upload'),
     path('escalation-check/process/', views.escalation_check_process_view, name='escalation_check_process'),
+    path('1004d-review/', views.d1004_file_review_upload_view, name='d1004_file_review_upload'),
+    path('1004d-review/process/', views.d1004_file_review_process_view, name='d1004_file_review_process'),
+    path('1004d-review/custom-analysis/', views.d1004_custom_analysis_view, name='d1004_custom_analysis'),
     
     # API endpoint for fetching section data
     path('api/data/<str:filename>/<str:section_name>/', views.get_section_data_api, name='get_section_data_api'),
-
+    
     # Add this line to serve the favicon
     path('favicon.ico', RedirectView.as_view(url=staticfiles_storage.url('extractor/img/favicon.ico'))),
 ]

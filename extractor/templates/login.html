@@ -3,49 +3,6 @@
 {% block title %}Login{% endblock %}
 
 {% block content %}
-<style>
-    .auth-container {
-        max-width: 450px;
-        margin: 50px auto;
-        padding: 2rem 2.5rem;
-        background-color: #ffffff;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        border-radius: 15px;
-    }
-    .auth-container h2 {
-        text-align: center;
-        margin-top: 0;
-        margin-bottom: 1.5rem;
-        color: #333;
-        font-weight: 600;
-    }
-    .auth-container form p {
-        margin-bottom: 1.2rem;
-    }
-    .auth-container input {
-        width: 100%;
-        padding: 12px;
-        border: 1px solid #d1d5db;
-        border-radius: 8px;
-        box-sizing: border-box;
-    }
-    .auth-container .btn {
-        width: 100%;
-        padding: 12px;
-        background-color: #007bff;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 1em;
-        font-weight: 600;
-        transition: background-color 0.2s;
-    }
-    .auth-container .btn:hover {
-        background-color: #0056b3;
-    }
-</style>
-
 <div class="auth-container">
         <h2>Login</h2>
         {% if messages %}

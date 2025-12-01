@@ -4,186 +4,7 @@
 
 {% block title %}Select Section to Review{% endblock %}
 {% block extra_css %}
-<style>
-    :root {
-        --primary-bg: #f8fafc;
-        --card-bg: #ffffff;
-        --border-color: #e5e7eb;
-        --text-primary: #1f2937;
-        --text-secondary: #6b7280;
-        --accent-color: #3b82f6;
-        --accent-hover: #2563eb;
-        --green-bg: #f0fdf4;
-        --green-border: #bbf7d0;
-        --green-text: #166534;
-    }
-
-    @keyframes fadeInUp {
-        from {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    body {
-        background-color: var(--primary-bg);
-    }
-
-    .home-container {
-        max-width: 1400px;
-        margin: 2rem auto;
-        padding: 0 2rem;
-    }
-
-    .page-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 2rem;
-    }
-
-    .page-header h1 {
-        font-size: 2.25rem;
-        color: var(--text-primary);
-        margin: 0;
-    }
-
-    .user-info {
-        text-align: right;
-    }
-
-    .user-info .username {
-        font-weight: 600;
-        color: var(--text-primary);
-    }
-
-    .user-info .logout-link {
-        font-size: 0.9em;
-        color: var(--accent-color);
-        text-decoration: none;
-    }
-
-    .main-grid {
-        display: grid;
-        grid-template-columns: 1fr 2fr;
-        gap: 2rem;
-        align-items: start;
-    }
-
-    .file-details-column {
-        display: flex;
-        flex-direction: column;
-        gap: 1.5rem;
-    }
-
-    .card {
-        background-color: var(--card-bg);
-        border-radius: 8px;
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
-        padding: 1.5rem;
-        opacity: 0;
-        animation: fadeInUp 0.6s ease-out forwards;
-    }
-
-    .card h3 {
-        margin-top: 0;
-        margin-bottom: 1rem;
-        font-size: 1.25rem;
-        color: var(--text-primary);
-        border-bottom: 1px solid var(--border-color);
-        padding-bottom: 0.75rem;
-    }
-
-    .detail-item {
-        display: flex;
-        justify-content: space-between;
-        padding: 0.5rem 0;
-        font-size: 0.95rem;
-    }
-
-    .detail-item strong {
-        color: var(--text-secondary);
-        font-weight: 500;
-    }
-
-    .detail-item span {
-        color: var(--text-primary);
-        font-weight: 600;
-        text-align: right;
-    }
-
-    .filename {
-        font-size: 0.85em;
-        color: var(--text-secondary);
-        word-break: break-all;
-        margin-top: 0.5rem;
-    }
-
-    .sections-column {
-        background-color: var(--card-bg);
-        border-radius: 8px;
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
-        padding: 1.5rem;
-        opacity: 0;
-        animation: fadeInUp 0.6s 0.2s ease-out forwards;
-    }
-
-    .sections-column h2 {
-        margin-top: 0;
-        margin-bottom: 1.5rem;
-    }
-
-    .section-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-        gap: 1rem;
-    }
-
-    .section-button {
-        background-color: #f9fafb;
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        padding: 1.25rem;
-        text-align: center;
-        text-decoration: none;
-        color: var(--text-secondary);
-        font-weight: 600;
-        font-size: 1rem;
-        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-    }
-
-    .section-button:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
-        color: var(--accent-color);
-        border-color: var(--accent-color);
-    }
-
-    .footer-actions {
-        text-align: center;
-        margin-top: 2.5rem;
-        padding-top: 1.5rem;
-        border-top: 1px solid var(--border-color);
-    }
-
-    .upload-another-link {
-        display: inline-block;
-        color: var(--text-secondary);
-        text-decoration: none;
-        border-bottom: 1px solid transparent;
-        transition: color 0.2s, border-color 0.2s;
-        font-weight: 500;
-    }
-
-    .upload-another-link:hover {
-        color: var(--text-primary);
-        border-bottom-color: var(--text-primary);
-    }
-</style>
+<body style="background-color: var(--primary-bg);">
 {% endblock %}
 
 {% block content %}
@@ -224,6 +45,15 @@
             <div class="card" style="animation-delay: 0.1s;">
                 <h3>Supporting Documents</h3>
                 {% if html_data %}
+                    <p class="filename"><strong>Order Form:</strong> {{ html_filename }}</p>
+                {% endif %}
+                {% if purchase_data %}
+                    <p class="filename"><strong>Purchase Contract:</strong> {{ purchase_filename }}</p>
+                {% endif %}
+                {% if engagement_data %}
+                    <p class="filename"><strong>Engagement Letter:</strong> {{ engagement_filename }}</p>
+                {% endif %}
+                {% if html_data %}
                     <div class="detail-item">
                         <strong>Client (Order):</strong>
                         <span>{{ html_data|get_item:"Client/Lender Name"|default:"-" }}</span>
@@ -236,17 +66,17 @@
                 {% if purchase_data %}
                     <div class="detail-item">
                         <strong>Contract Price:</strong>
-                        <span>{{ purchase_data|get_item:"Contract Price"|default:"-" }}</span>
+                        <span>{{ purchase_data.contract|get_item:"Contract Price $"|default:"-" }}</span>
                     </div>
                     <div class="detail-item">
                         <strong>Contract Date:</strong>
-                        <span>{{ purchase_data|get_item:"Date of Contract"|default:"-" }}</span>
+                        <span>{{ purchase_data.contract|get_item:"Date of Contract"|default:"-" }}</span>
                     </div>
                 {% endif %}
-                {% if engagement_data %}
+                {% if engagement_data and engagement_data.addendum %}
                     <div class="detail-item">
                         <strong>Engagement Fee:</strong>
-                        <span>{{ engagement_data|get_item:"Appraisal Fee"|default:engagement_data|get_item:"Total Fee"|default:"-" }}</span>
+                        <span>{{ engagement_data.addendum|get_item:"Appraisal Fee"|default:engagement_data.addendum|get_item:"Total Fee"|default:"-" }}</span>
                     </div>
                 {% endif %}
             </div>
@@ -256,11 +86,27 @@
         <div class="sections-column">
             <h2>Select a section to review</h2>
             <div class="section-grid">
-                {% for section_name, display_name in sections.items %}
-                    <a href="{% url 'extract_section' filename=filename section_name=section_name %}" class="section-button">
-                        {{ display_name }}
-                    </a>
-                {% endfor %}
+                {% with main_form_type=base_info|get_item:"APPRAISAL FORM TYPE (1004/1025/1004D/1073)" %}
+                    {% if main_form_type and "1004D" in main_form_type %}
+                        {# If the form is 1004D, only show the D1004 section #}
+                        {% for section_name, display_name in sections.items %}
+                            {% if section_name == 'd1004' %}
+                                <a href="{% url 'extract_section' filename=filename section_name=section_name %}" class="section-button">
+                                    {{ display_name }}
+                                </a>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        {# Otherwise, show all sections except D1004 #}
+                        {% for section_name, display_name in sections.items %}
+                            {% if section_name != 'd1004' %}
+                                <a href="{% url 'extract_section' filename=filename section_name=section_name %}" class="section-button">
+                                    {{ display_name }}
+                                </a>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
             </div>
         </div>
     </div>
@@ -268,6 +114,7 @@
     <div class="footer-actions">
         <a href="{% url 'upload_pdf' %}" class="upload-another-link">← Upload a different file</a>
     </div>
+    
 </div>
 {% endblock %}
 

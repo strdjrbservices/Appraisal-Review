@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block title %}1004D Review Results{% endblock %}
+
+{% block content %}
+<div class="results-container">
+    <h1>1004D File Review Results</h1>
+
+    {% if results.error %}
+        <div class="error-message">
+            <p><strong>Error:</strong> {{ results.error }}</p>
+        </div>
+    {% else %}
+        <div class="file-info">
+            <p><strong>Original Appraisal:</strong> {{ results.original_filename }}</p>
+            <p><strong>1004D Form:</strong> {{ results.d1004_filename }}</p>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Field</th>
+                    <th>Original Appraisal Value</th>
+                    <th>1004D Form Value</th>
+                    {% if has_html %}
+                    <th>HTML Order Form Value</th>
+                    {% endif %}
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in results.comparison %}
+                <tr>
+                    <td><strong>{{ item.field }}</strong></td>
+                    <td>{{ item.original_value|default:"N/A" }}</td>
+                    <td>{{ item.d1004_value|default:"N/A" }}</td>
+                    {% if has_html %}
+                    <td>{{ item.html_value|default:"N/A" }}</td>
+                    {% endif %}
+                    <td><span class="{% if item.match %}status-match{% else %}status-mismatch{% endif %}">{% if item.match %}Match{% else %}Mismatch{% endif %}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+</div>
+{% endblock %}

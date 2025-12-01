@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block title %}1004D File Review{% endblock %}
+
+{% block content %}
+<form id="upload-form" class="d1004-form" action="{% url 'd1004_file_review_process' %}" method="post" enctype="multipart/form-data">
+    <h2>1004D File Review</h2>
+    <p>Upload the original appraisal report and the 1004D form to compare key information.</p>
+    {% csrf_token %}
+    <div class="file-upload-container">
+        <div id="file-drop-zone-original" class="file-drop-zone">
+            <p class="drop-zone-text"><strong>Original Appraisal (PDF):</strong><br>Drag & Drop or <span class="browse-link">browse</span></p>
+            <span id="file-name-original" class="file-name"></span>
+        </div>
+        <div id="file-drop-zone-d1004" class="file-drop-zone">
+            <p class="drop-zone-text"><strong>1004D Form (PDF):</strong><br>Drag & Drop or <span class="browse-link">browse</span></p>
+            <span id="file-name-d1004" class="file-name"></span>
+        </div>
+        <div id="file-drop-zone-html" class="file-drop-zone">
+            <p class="drop-zone-text"><strong>Order Form (HTML, Optional):</strong><br>Drag & Drop or <span class="browse-link">browse</span></p>
+            <span id="file-name-html" class="file-name"></span>
+        </div>
+        <div id="file-drop-zone-purchase" class="file-drop-zone">
+            <p class="drop-zone-text"><strong>Purchase Contract (PDF, Optional):</strong><br>Drag & Drop or <span class="browse-link">browse</span></p>
+            <span id="file-name-purchase" class="file-name"></span>
+        </div>
+    </div>
+    <input id="original_pdf" type="file" name="original_pdf" accept="application/pdf" required>
+    <input id="d1004_pdf" type="file" name="d1004_pdf" accept="application/pdf" required>
+    <input id="html_file" type="file" name="html_file" accept=".html,.htm">
+    <input id="purchase_copy_file" type="file" name="purchase_copy_file" accept="application/pdf">
+    <button type="submit" class="btn">Start 1004D Review</button>
+</form>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        function setupDragAndDrop(dropZoneId, fileInputId, fileNameId) { const dropZone = document.getElementById(dropZoneId), fileInput = document.getElementById(fileInputId), fileNameDisplay = document.getElementById(fileNameId); if (!dropZone || !fileInput || !fileNameDisplay) return; dropZone.addEventListener('click', () => fileInput.click()); dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); }); ['dragleave', 'dragend'].forEach(type => { dropZone.addEventListener(type, () => dropZone.classList.remove('dragover')); }); dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; fileNameDisplay.textContent = fileInput.files[0].name; } }); fileInput.addEventListener('change', () => { if (fileInput.files.length) { fileNameDisplay.textContent = fileInput.files[0].name; } }); }
+        setupDragAndDrop('file-drop-zone-original', 'original_pdf', 'file-name-original');
+        setupDragAndDrop('file-drop-zone-d1004', 'd1004_pdf', 'file-name-d1004');
+        setupDragAndDrop('file-drop-zone-html', 'html_file', 'file-name-html');
+        setupDragAndDrop('file-drop-zone-purchase', 'purchase_copy_file', 'file-name-purchase');
+    });
+</script>
+{% endblock %}

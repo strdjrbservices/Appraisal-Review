@@ -1,143 +1,9 @@
 {% extends 'base.html' %}
-
+{% load dict_helpers %}
+{% load static %}
 {% block title %}PDF Comparison Results{% endblock %}
 
 {% block content %}
-<style>
-    .results-container {
-        max-width: 800px;
-        margin: 2rem auto;
-        padding: 2rem;
-        background-color: #fff;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-    }
-    .results-container h2 {
-        margin-top: 0;
-        border-bottom: 1px solid #e5e7eb;
-        padding-bottom: 1rem;
-        margin-bottom: 1.5rem;
-    }
-    .summary-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1.5rem;
-        margin-bottom: 2rem;
-    }
-    .summary-card {
-        background-color: #f9fafb;
-        padding: 1.5rem;
-        border-radius: 8px;
-        border: 1px solid #e5e7eb;
-    }
-    .summary-card h3 {
-        margin-top: 0;
-        font-size: 1.1rem;
-        color: #374151;
-    }
-    .summary-card .filename {
-        font-size: 0.9em;
-        color: #6b7280;
-        word-break: break-all;
-    }
-    .summary-card .page-count {
-        font-size: 2rem;
-        font-weight: 700;
-        color: #111827;
-        margin-top: 0.5rem;
-    }
-    .value-comparison-card {
-        grid-column: 1 / -1; /* Span both columns */
-        background-color: #f3f4f6;
-        padding: 1.5rem;
-        border-radius: 8px;
-        border: 1px solid #e5e7eb;
-        margin-top: -1rem; /* Pull it up slightly */
-        margin-top: 0.5rem;
-    }
-    .differences-section {
-        margin-top: 2rem;
-    }
-    .differences-section h3 {
-        color: #1f2937;
-    }
-    .alert {
-        padding: 1rem 1.5rem;
-        border-radius: 6px;
-        font-weight: 500;
-    }
-    .alert-success {
-        background-color: #f0fdf4;
-        border: 1px solid #bbf7d0;
-        color: #166534;
-    }
-    .alert-warning {
-        background-color: #fffbeb;
-        border: 1px solid #fde68a;
-        color: #854d0e;
-    }
-    .page-list {
-        list-style-type: none;
-        padding: 0;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-    .page-list li {
-        background-color: #fee2e2;
-        color: #991b1b;
-        padding: 0.25rem 0.75rem;
-        border-radius: 999px;
-        font-size: 0.9em;
-        font-weight: 500;
-    }
-    .diff-details {
-        margin-top: 1.5rem;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        overflow: hidden;
-    }
-    .diff-header {
-        background-color: #f9fafb;
-        padding: 0.75rem 1.5rem;
-        font-weight: 600;
-        cursor: pointer;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .diff-header:hover {
-        background-color: #f3f4f6;
-    }
-    .diff-content {
-        display: none; /* Hidden by default */
-        padding: 1rem;
-        background-color: #fff;
-        border-top: 1px solid #e5e7eb;
-        overflow-x: auto;
-    }
-    /* Styles for the difflib table */
-    table.diff {
-        border-collapse: collapse;
-        width: 100%;
-        font-family: monospace;
-        font-size: 0.9em;
-    }
-    .diff th {
-        background-color: #f1f1f1;
-    }
-    .diff_add { background-color: #e6ffed; }
-    .diff_chg { background-color: #fff3cd; }
-    .diff_sub { background-color: #ffeef0; }
-    .arrow::after {
-        content: ' ▼';
-        transition: transform 0.2s;
-    }
-    .arrow.open::after {
-        transform: rotate(-180deg);
-    }
-</style>
-
 <div class="results-container">
     <h2>Comparison Summary</h2>
 
@@ -149,12 +15,23 @@
         <div class="summary-card">
             <h3>PDF 1 (Revised Report)</h3>
             <p class="filename">{{ filename1 }}</p>
-            <p class="page-count">{{ results.page_count_1 }} Pages</p>
+            <p class="page-count">{{ results.page_count_1 }} Page{{ results.page_count_1|pluralize }}</p>
         </div>
         <div class="summary-card">
             <h3>PDF 2 (Old Report)</h3>
             <p class="filename">{{ filename2 }}</p>
-            <p class="page-count">{{ results.page_count_2 }} Pages</p>
+            <p class="page-count">{{ results.page_count_2 }} Page{{ results.page_count_2|pluralize }}</p>
+        </div>
+
+        <div class="summary-card supporting-docs-card">
+            <h3>Supporting Documents</h3>
+            {% if html_filename or purchase_filename or engagement_filename %}
+                <p class="filename">{% if html_filename %}<strong>Order Form:</strong> {{ html_filename }}{% endif %}</p>
+                <p class="filename">{% if purchase_filename %}<strong>Purchase Contract:</strong> {{ purchase_filename }}{% endif %}</p>
+                <p class="filename">{% if engagement_filename %}<strong>Engagement Letter:</strong> {{ engagement_filename }}{% endif %}</p>
+            {% else %}
+                <p style="color: #6b7280; font-style: italic;">No supporting documents were uploaded.</p>
+            {% endif %}
         </div>
 
         {% if results.market_value_1 or results.market_value_2 %}
@@ -179,6 +56,66 @@
         </div>
         {% endif %}
     </div>
+
+    {% if results.html_data or results.purchase_data or results.engagement_data %}
+    <div class="differences-section">
+        <h3>Supporting Data Summary</h3>
+        <div class="diff-details open">
+            <div class="diff-header open">
+                <span>Extracted Data from Supporting Documents</span>
+                <span class="arrow open"></span>
+            </div>
+            <div class="diff-content" style="display: block;">
+                <div class="supporting-data-grid">
+                    {% if results.html_data %}
+                    <div class="data-card">
+                        <h4>Order Form Data</h4>
+                        <p><strong>Client:</strong> {{ results.html_data|get_item:"Client/Lender Name"|default:"-" }}</p>
+                        <p><strong>Borrower:</strong> {{ results.html_data|get_item:"Borrower (and Co-Borrower)"|default:"-" }}</p>
+                    </div>
+                    {% endif %}
+                    {% if results.purchase_data %}
+                    <div class="data-card">
+                        <h4>Purchase Contract Data</h4>
+                        <p><strong>Contract Price:</strong> {{ results.purchase_data|get_item:"Contract Price $"|default:"-" }}</p>
+                        <p><strong>Contract Date:</strong> {{ results.purchase_data|get_item:"Date of Contract"|default:"-" }}</p>
+                    </div>
+                    {% endif %}
+                    {% if results.engagement_data and results.engagement_data.addendum %}
+                    <div class="data-card">
+                        <h4>Engagement Letter Data</h4>
+                        <p><strong>Engagement Fee:</strong> {{ results.engagement_data.addendum|get_item:"Appraisal Fee"|default:results.engagement_data.addendum|get_item:"Total Fee"|default:"-" }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+
+    <!-- Automatic Revision Check Section -->
+    {% if results.revision_check_results and not results.revision_check_results.error %}
+    <div class="differences-section">
+        <h3>Automatic Revision Check</h3>
+        <div class="diff-details open">
+            <div class="diff-header open">
+                <span>Analysis of Rejection Reason vs. Revised Report</span>
+                <span class="arrow open"></span>
+            </div>
+            <div class="diff-content" style="display: block;">
+                <div class="revision-check-card">
+                    <h4>Rejection Reason from Order Form:</h4>
+                    <p class="rejection-reason"><em>{{ results.rejection_reason|default:"Not found." }}</em></p>
+                    <hr>
+                    <h4>AI Verification Result: <span class="status-badge status-{{ results.revision_check_results.status|lower }}">{{ results.revision_check_results.status }}</span></h4>
+                    <p><strong>Summary:</strong> {{ results.revision_check_results.summary }}</p>
+                    <p><strong>Details:</strong> {{ results.revision_check_results.details }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="differences-section">
         <h3>Findings</h3>

@@ -1,499 +1,13 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'extractor\css\style.css' %}">
     <title>Extraction Result: {{ section_title }}</title>
-    <style>
-        :root {
-            --primary-bg: #f8fafc;
-            --sidebar-bg: #ffffff;
-            --border-color: #e5e7eb;
-            --text-primary: #1f2937;
-            --text-secondary: #6b7280;
-            --accent-color: #3b82f6;
-            --accent-hover: #2563eb;
-            --error-color: #dc2626;
-        }
-        /* ... existing styles ... */
-        body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-            display: flex;
-            margin: 0;
-            background-color: var(--primary-bg);
-            color: var(--text-primary);
-        }
-        .sidebar {
-            width: 280px;
-            background-color: var(--sidebar-bg);
-            padding: 24px;
-            height: 100vh;
-            border-right: 1px solid var(--border-color);
-            box-shadow: 2px 0 10px rgba(0,0,0,0.03);
-            display: flex;
-            flex-direction: column;
-        }
-        .sidebar-header {
-            padding-bottom: 1rem;
-            margin-bottom: 1rem;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .sidebar-header p { margin: 0; }
-        .sidebar-header .username { font-weight: 600; }
-        .sidebar-header .logout-link {
-            font-size: 0.9em; color: var(--accent-color); text-decoration: none;
-        }
-        .sidebar-footer {
-            margin-top: 20px;
-            display: flex;
-            gap: 10px;
-        }
-        .back-btn {
-            display: block;
-            flex-grow: 1;
-            padding: 12px;
-            background-color: #6c757d;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            text-align: center;
-            text-decoration: none;
-            font-weight: 500;
-        }
-        .sidebar h3 {
-            margin-top: 0;
-            font-size: 1.25rem;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 16px;
-        }
-        .sidebar ul {
-            list-style-type: none;
-            padding: 0;
-            margin: 0;
-            overflow-y: auto;
-            flex-grow: 1;
-        }
-        .sidebar li a {
-            display: block;
-            padding: 12px 16px;
-            text-decoration: none;
-            color: var(--text-secondary);
-            border-radius: 6px;
-            font-weight: 500;
-            transition: background-color 0.2s, color 0.2s;
-        }
-        .sidebar li a:hover {
-            background-color: #f3f4f6;
-            color: var(--text-primary);
-        }
-        .sidebar li a.active {
-            background-color: var(--accent-color);
-            color: white;
-            font-weight: 600;
-        }
-        .new-upload-btn {
-            display: block;
-            width: 100%;
-            padding: 12px;            
-            margin-top: 20px;
-            background-color: #e5e7eb;
-            color: #374151;
-            border: none;
-            border-radius: 6px;
-            text-align: center;
-            text-decoration: none;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .sidebar-footer .new-upload-btn {
-            margin-top: 0;
-            flex-grow: 1;
-        }
-        .new-upload-btn:hover {
-            background-color: #d1d5db;
-        }
-        .main-content {
-            flex-grow: 1;
-            padding: 40px;
-            position: relative;
-        }
-        .header-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px; /* Space between header and validation messages */
-        }
-        .header-main {
-            display: flex;
-            align-items: baseline;
-            gap: 1rem;
-        }
-        h1 { margin: 0; font-size: 2rem; }
-        .loading-overlay {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(255, 255, 255, 0.8);
-            display: none; /* Hidden by default */
-            justify-content: center;
-            align-items: center;
-            z-index: 10;
-        }
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid var(--accent-color);
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            background: white;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        th, td {
-            border-bottom: 1px solid var(--border-color);
-            padding: 16px;
-            text-align: left;
-        }
-        th {
-            background-color: #f9fafb;
-            font-weight: 600;
-            color: var(--text-secondary);
-        }
-        tbody tr:last-child th,
-        tbody tr:last-child td {
-            border-bottom: none;
-        }
-        .error {
-            color: var(--error-color);
-            background-color: #fef2f2;
-            border: 1px solid #fecaca;
-            padding: 16px;
-            border-radius: 6px;
-            font-weight: 500;
-        }
-        .validation-message {
-            padding: 16px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            font-weight: 500;
-        }
-        .validation-success {
-            background-color: #f0fdf4;
-            border: 1px solid #bbf7d0;
-            color: #166534;
-        }
-        .validation-error {
-            background-color: #fffbeb;
-            border: 1px solid #fde68a;
-            color: #854d0e;
-        }
-        .validation-warning {
-            background-color: #fff3cd; /* Light yellow */
-            border: 1px solid #ffeeba; /* Yellow border */
-            color: #664d03; /* Dark yellow text */
-        }
-        .structured-value {
-            list-style-type: none;
-            padding: 0;
-            margin: 0;
-        }
-        .structured-value li {
-            display: flex;
-            justify-content: space-between;
-            padding: 4px 0;
-        }
-        .editable-value {
-            background-color: #fefce8; /* Light yellow background */
-            cursor: text;
-            padding: 14px 16px; /* Adjust padding to match other cells */
-            margin: -16px; /* Counteract parent padding */
-            min-height: 1.5em; /* Ensure it has some height even when empty */
-        }
-        .editable-value:focus {
-            outline: 2px solid var(--accent-color);
-        }
-        .validate-button {
-            padding: 10px 20px;
-            background-color: var(--accent-color);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 0.9rem;
-            transition: background-color 0.2s;
-        }
-        .validate-button:hover {
-            background-color: var(--accent-hover);
-        }
-        /* Styles for Consistency Check section */
-        .consistency-check {
-            border-left-width: 4px;
-        }
-        .consistency-success {
-            border-left-color: #22c55e; /* green-500 */
-        }
-        .consistency-mismatch {
-            border-left-color: #f59e0b; /* amber-500 */
-        }
-        .consistency-check .check-title {
-            font-weight: 600;
-        }
-        .consistency-check .check-details {
-            color: var(--text-secondary);
-            padding-top: 8px;
-        }
-        /* Styles for Custom Analysis */
-        .custom-analysis-container {
-            background: white;
-            padding: 24px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-        .custom-analysis-container h3 {
-            margin-top: 0;
-        }
-        .custom-analysis-summary {
-            background-color: #f3f4f6;
-            padding: 16px;
-            border-radius: 6px;
-            margin-top: 16px;
-            white-space: pre-wrap;
-            line-height: 1.6;
-        }
-        .findings-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 24px;
-        }
-        .findings-table th, .findings-table td {
-            border: 1px solid var(--border-color);
-            padding: 12px 16px;
-            text-align: left;
-        }
-        .findings-table th {
-            background-color: #f9fafb;
-        }
-        .finding-title {
-            font-weight: 600;
-        }
-        .finding-source {
-            font-style: italic;
-            color: var(--text-secondary);
-            font-size: 0.9em;
-        }
-        .query-display {
-            background: #eef2ff;
-            border-left: 4px solid #4338ca;
-            padding: 16px;
-            border-radius: 4px;
-        }
-        /* New styles for Custom Analysis two-column layout */
-        .custom-analysis-page-container {
-            display: flex;
-            gap: 40px;
-            height: calc(100vh - 120px); /* Adjust based on header height */
-        }
-        .analysis-form-column {
-            flex: 0 0 40%; /* Form takes 40% of the width */
-            display: flex;
-            flex-direction: column;
-        }
-        .analysis-results-column {
-            flex: 1; /* Results take the remaining space */
-            overflow-y: auto; /* Allow results to scroll independently */
-            padding-right: 20px; /* Add some padding for the scrollbar */
-        }
-        .analysis-card {
-            background-color: #f8f9fa;
-            border: 1px solid #dee2e6;
-            padding: 1.5rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .analysis-card h3 {
-            margin-top: 0;
-            color: #343a40;
-        }
-        .analysis-card textarea {
-            width: 100%;
-            padding: 0.75rem;
-            border-radius: 6px;
-            border: 1px solid #ced4da;
-            font-family: inherit;
-            font-size: 1rem;
-            margin-top: 1rem;
-            min-height: 150px;
-            resize: vertical;
-        }
-        .analysis-card textarea:focus {
-            border-color: var(--accent-color);
-            box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25);
-            outline: none;
-        }
-        .btn-submit {
-            background-color: #28a745;
-            color: white;
-            margin-top: 1rem;
-            border: none;
-            cursor: pointer;
-            width: 100%;
-            padding: 12px;
-            font-size: 1rem;
-            border-radius: 6px;
-            font-weight: 600;
-            transition: background-color 0.2s;
-        }
-        .btn-submit:hover {
-            background-color: #218838;
-        }
-        .btn-finish {
-            background-color: #dc3545;
-            color: white;
-            margin-top: 1rem;
-            border: none;
-            cursor: pointer;
-            width: 100%;
-            padding: 12px;
-            font-size: 1rem;
-            border-radius: 6px;
-            font-weight: 600;
-            transition: background-color 0.2s;
-        }
-        .suggested-prompts {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.75rem;
-            margin-top: 1rem;
-            margin-bottom: 1.5rem;
-        }
-        .prompt-suggestion-btn {
-            background-color: #e9ecef;
-            border: 1px solid #dee2e6;
-            color: #495057;
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            font-size: 0.9em;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background-color 0.2s, color 0.2s, border-color 0.2s;
-        }
-        .prompt-suggestion-btn:hover {
-            background-color: #d0e3ff;
-            color: #004085;
-            border-color: #b8daff;
-        }
-        .placeholder-text {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100%;
-            color: var(--text-secondary);
-            font-size: 1.1rem;
-            text-align: center;
-            border: 2px dashed var(--border-color);
-            border-radius: 8px;
-        }
-        .common-prompt-details {
-            font-size: 0.85em;
-            color: #6c757d;
-            background-color: #f8f9fa;
-            border: 1px solid #e9ecef;
-            padding: 10px;
-            border-radius: 4px;
-            margin-top: 5px;
-            display: none; /* Hidden by default */
-        }
-        .common-prompt-details ul {
-            padding-left: 20px;
-            margin: 0;
-        }
-        .common-prompt-btn-container {
-            position: relative;
-        }
-        .common-prompt-btn-container:hover .common-prompt-details {
-            display: block;
-        }
-        /* New styles for Revision Helper */
-        .revision-helper-card {
-            background-color: #fffbeb; /* Light yellow background */
-            border: 1px solid #fde68a; /* Yellow border */
-            border-left: 4px solid #f59e0b; /* Amber-500 left border */
-            padding: 24px;
-            border-radius: 8px;
-            margin-top: 40px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-        .revision-helper-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-        }
-        .revision-helper-card h3 {
-            margin-top: 0;
-            color: #854d0e; /* Dark yellow text */
-            font-size: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 0; /* Remove bottom margin from h3 */
-        }
-        .toggle-revision-helper-btn {
-            background-color: transparent;
-            border: 1px solid #f59e0b;
-            color: #854d0e;
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.2s, color 0.2s;
-        }
-        .toggle-revision-helper-btn:hover {
-            background-color: #fef3c7;
-        }
-        .revision-helper-card h3::before {
-            content: '📋'; /* Clipboard emoji */
-            font-size: 1.8rem;
-        }
-        .revision-helper-card p {
-            margin-top: 0;
-            color: #664d03;
-        }
-        .revision-helper-content {
-            display: none; /* Hidden by default */
-            margin-top: 16px;
-        }
-        .revision-helper-card.expanded .revision-helper-content {
-            display: block; /* Show when card has 'expanded' class */
-        }
-        .revision-helper-list {
-            list-style-type: none;
-            padding-left: 0;
-            margin-top: 20px;
-            columns: 2;
-            column-gap: 30px;
-        }
-        .revision-helper-list li {
-            padding: 8px 0;
-            color: #854d0e;
-            font-weight: 500;
-            border-bottom: 1px solid #fde68a;
-        }
-    </style>
 </head>
-<body>
+<body style="display: flex; margin: 0; background-color: var(--primary-bg); color: var(--text-primary);">
     {% load dict_helpers %}
     <div class="sidebar">
         <div class="sidebar-header">
@@ -674,6 +188,9 @@
                             <li>Ensure offering price is noted if offered for sale.</li>
                             <li>Refer to attached legal description if applicable.</li>
                             <li>Ensure 'offered for sale' checkbox is appropriately marked.</li>
+                            <li>Ensure 'ANSI Standard Confirmation' is marked.</li>
+                            <li>Verify 'Reasonable Exposure Time Comment' is provided.</li>
+                            <li>Ensure 'Prior Service Certification' is marked.</li>
                             <li>For investment property, revise occupancy to tenant or vacant.</li>
                         </ul>
                     </div>
@@ -926,6 +443,15 @@
 
 Also please confirm subject street, front and rear photo are present and no duplicates.">Verify Subject Address, Photo(Street, front, rear, Duplicates)</button>
                             <button type="button" class="prompt-suggestion-btn" data-prompt="Compare the bedroom and bathroom counts between the Improvements section, Sales Grid, and all available floor plans/ sktech/ building sketch and all photos.">Compare Room Counts</button>
+                            <button type="button" class="prompt-suggestion-btn" data-prompt="Check Consistent values
+
+Indicated Value by Sales Comparison Approach $ from sales grid
+
+Indicated Value by: Sales Comparison Approach $ from Reconciliation
+
+opinion of the market value $ from Reconciliation
+
+APPRAISED VALUE OF SUBJECT PROPERTY $ from APPRAISER CERTIFICATION">Final value $ Consistency</button>
                             <button type="button" class="prompt-suggestion-btn" data-prompt="Match all comparable property addresses between the Sales Grid, photo pages, and the Location Map.
 
 Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)</button>
@@ -1308,10 +834,10 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                     <tr><td>Effective date of cost data</td><td contenteditable="true" class="editable-value" data-field-name="Effective date of cost data">{{ data|get_item:"Effective date of cost data"|default_if_none:"" }}</td></tr>
                     
                     <tr style="background-color: #f9fafb;"><td colspan="2" style="padding: 8px;"></td></tr>
-                    
+
                     <tr><td>Opinion of Site Value</td><td contenteditable="true" class="editable-value" data-field-name="Opinion of Site Value">{{ data|get_item:"Opinion of Site Value"|default_if_none:"" }}</td></tr>
                     
-                    <tr style="background-color: #f9fafb;"><td colspan="2" style="font-weight: 600; color: var(--text-secondary); padding-left: 16px;">ESTIMATED REPRODUCTION OR REPLACEMENT COST NEW</td></tr>
+                    <tr><td>ESTIMATED (REPRODUCTION / REPLACEMENT COST NEW)</td><td contenteditable="true" class="editable-value" data-field-name="ESTIMATED (REPRODUCTION / REPLACEMENT COST NEW)">{{ data|get_item:"ESTIMATED (REPRODUCTION / REPLACEMENT COST NEW)"|default_if_none:"" }}</td></tr>
                     
                     <tr><td>Dwelling</td><td contenteditable="true" class="editable-value" data-field-name="Dwelling">{{ data|get_item:"Dwelling"|default_if_none:"" }}</td></tr>
                     <tr><td>Garage/Carport</td><td contenteditable="true" class="editable-value" data-field-name="Garage/Carport">{{ data|get_item:"Garage/Carport"|default_if_none:"" }}</td></tr>
@@ -1384,9 +910,17 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
             const loadingOverlay = document.getElementById('loading-overlay');
 
             links.forEach(link => {
-                link.addEventListener('click', function() {
-                    // Show the loading spinner when a section link is clicked
+                link.addEventListener('click', function(event) {
+                    // If the link is already disabled, do nothing.
+                    if (this.classList.contains('disabled')) {
+                        event.preventDefault();
+                        return;
+                    }
+                    // Show the loading spinner
                     loadingOverlay.style.display = 'flex';
+
+                    // "Freeze" all other links to prevent multiple clicks
+                    links.forEach(otherLink => otherLink.classList.add('disabled'));
                 });
             });
 
@@ -1534,7 +1068,8 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                     'Legal Description', "Assessor's Parcel #", 'Tax Year', 'R.E. Taxes $', 'Neighborhood Name', 'Map Reference',
                     'Census Tract', 'Occupant', 'Special Assessments $', 'PUD',
                     'Property Rights Appraised', 'Assignment Type', 'Lender/Client', 'Address (Lender/Client)',
-                    'Offered for Sale in Last 12 Months'
+                    'Offered for Sale in Last 12 Months',
+                    'ANSI Standard Confirmation', 'Reasonable Exposure Time Comment', 'Prior Service Certification'
                 ];
                 const missingRequiredFields = [];
                 let pudValue = '';
@@ -1726,6 +1261,72 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                 }
                 {% endif %}
 
+                {% if section_key == 'base_info' %}
+                // --- Validation for Base Info section ---
+                const getFieldValue = (fieldName) => {
+                    const row = Array.from(tableRows).find(r => r.querySelector('td:first-child')?.textContent.trim() === fieldName);
+                    return row ? row.querySelector('td:last-child')?.textContent.trim() : null;
+                };
+
+                const addValidationMessage = (type, message) => {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message', `validation-${type}`);
+                    messageDiv.innerHTML = message;
+                    validationContainer.appendChild(messageDiv);
+                };
+
+                const appraisalFormType = getFieldValue('APPRAISAL FORM TYPE (1004/1025/1004D/1073)');
+                const additionalForm = getFieldValue('Additional Form (1007/216/Rental/STR)');
+                // Capture new field values
+                const ansiValue = getFieldValue('ANSI Standard Confirmation')?.toLowerCase();
+                const exposureCommentValue = getFieldValue('Reasonable Exposure Time Comment');
+                const priorServiceValue = getFieldValue('Prior Service Certification')?.toLowerCase();
+
+                // 1. Validate APPRAISAL FORM TYPE
+                if (!appraisalFormType || appraisalFormType === '--' || appraisalFormType === 'null') {
+                    addValidationMessage('error', "⚠️ Validation warning: 'APPRAISAL FORM TYPE' cannot be blank.");
+                } else {
+                    const validFormTypes = ['1004', '1025', '1004D', '1073'];
+                    if (!validFormTypes.some(type => appraisalFormType.includes(type))) {
+                        addValidationMessage('error', `⚠️ Validation warning: 'APPRAISAL FORM TYPE' ('${appraisalFormType}') is not a recognized type (e.g., 1004, 1025, 1004D, 1073).`);
+                    } else {
+                        addValidationMessage('success', `✅ Validation successful: 'APPRAISAL FORM TYPE' is '${appraisalFormType}'.`);
+                    }
+                }
+
+                // 2. Validate Additional Form
+                if (!additionalForm || additionalForm === '--' || additionalForm === 'null') {
+                    addValidationMessage('error', "⚠️ Validation warning: 'Additional Form' cannot be blank. Should state 'None' if not applicable.");
+                } else {
+                    const validAdditionalForms = ['1007', '216', 'rental', 'str', 'none'];
+                    if (!validAdditionalForms.some(type => additionalForm.toLowerCase().includes(type))) {
+                        addValidationMessage('error', `⚠️ Validation warning: 'Additional Form' ('${additionalForm}') is not a recognized type (e.g., 1007, 216, Rental, STR, None).`);
+                    } else {
+                        addValidationMessage('success', `✅ Validation successful: 'Additional Form' is '${additionalForm}'.`);
+                    }
+                }
+
+                // Validation for ANSI Standard Confirmation
+                if (ansiValue === 'did' || ansiValue === 'did not') {
+                    addValidationMessage('success', `✅ Validation successful: 'ANSI Standard Confirmation' is correctly marked as '${ansiValue}'.`);
+                } else {
+                    addValidationMessage('error', `⚠️ Validation warning: 'ANSI Standard Confirmation' must be 'did' or 'did not'. It is currently '${ansiValue || 'blank'}'.`);
+                }
+
+                // Validation for Reasonable Exposure Time Comment
+                if (exposureCommentValue && exposureCommentValue !== '--' && exposureCommentValue !== 'null') {
+                    addValidationMessage('success', `✅ Validation successful: 'Reasonable Exposure Time Comment' is present.`);
+                } else {
+                    addValidationMessage('error', `⚠️ Validation warning: 'Reasonable Exposure Time Comment' cannot be blank.`);
+                }
+
+                // Validation for Prior Service Certification
+                if (priorServiceValue === 'have' || priorServiceValue === 'have not') {
+                    addValidationMessage('success', `✅ Validation successful: 'Prior Service Certification' is correctly marked as '${priorServiceValue}'.`);
+                } else {
+                    addValidationMessage('error', `⚠️ Validation warning: 'Prior Service Certification' must be 'have' or 'have not'. It is currently '${priorServiceValue || 'blank'}'.`);
+                }
+                {% endif %}
                 {% if section_key == 'contract' %}
                 // Validation for 'Refinance Transaction' requiring a blank 'Contract' section
                 if (sessionStorage.getItem('isRefinanceTransaction') === 'true') {
@@ -2675,162 +2276,6 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                 }
                 {% endif %}
 
-                {% if section_key == 'sale_history' %}
-                // --- Validation for "My research..." field ---
-                const priorSaleFieldIdentifier = "My research _____ reveal any prior sales or transfers of the subject property for the three years prior to the effective date of this appraisal.(did/did not)";
-                let priorSaleValue = null;
-                
-                // Find the value from the "Research and Analysis" table
-                const researchAndAnalysisTable = document.querySelector('h3:last-of-type + table');
-                if (researchAndAnalysisTable) {
-                    Array.from(researchAndAnalysisTable.querySelectorAll('tbody tr')).forEach(row => {
-                        const fieldCell = row.querySelector('td:first-child');
-                        if (fieldCell && fieldCell.textContent.trim() === priorSaleFieldIdentifier) {
-                            priorSaleValue = row.querySelector('td:last-child')?.textContent.trim().toLowerCase();
-                        }
-                    });
-                }
-
-                if (priorSaleValue === 'did') {
-                    // If prior sale "did" happen, validate the grid data for the subject
-                    const priorSaleGrid = document.querySelector('h3:first-of-type + table');
-                    let priorSaleDate = null;
-                    let priorSalePrice = null;
-
-                    if (priorSaleGrid) {
-                        Array.from(priorSaleGrid.querySelectorAll('tbody tr')).forEach(row => {
-                            const fieldCell = row.querySelector('td:first-child');
-                            const subjectValueCell = row.querySelector('td:nth-child(2)'); // Subject is the 2nd column
-                            if (fieldCell && subjectValueCell) {
-                                const fieldName = fieldCell.textContent.trim();
-                                if (fieldName === "Date of Prior Sale/Transfer") {
-                                    priorSaleDate = subjectValueCell.textContent.trim();
-                                }
-                                if (fieldName === "Price of Prior Sale/Transfer") {
-                                    priorSalePrice = subjectValueCell.textContent.trim();
-                                }
-                            }
-                        });
-                    }
-
-                    const effectiveDateStr = sessionStorage.getItem('reconciliationEffectiveDate');
-                    const isDateBlank = !priorSaleDate || priorSaleDate === '--' || priorSaleDate === 'null';
-                    const isPriceBlank = !priorSalePrice || priorSalePrice === '--' || priorSalePrice === 'null';
-
-                    if (isDateBlank) addValidationMessage('error', "⚠️ Validation Error: Prior sale was indicated ('did'), but the 'Date of Prior Sale/Transfer' for the subject is blank.");
-                    if (isPriceBlank) addValidationMessage('error', "⚠️ Validation Error: Prior sale was indicated ('did'), but the 'Price of Prior Sale/Transfer' for the subject is blank.");
-
-                    if (effectiveDateStr && !isDateBlank) {
-                        const effectiveDate = new Date(effectiveDateStr);
-                        const saleDate = new Date(priorSaleDate);
-                        const threeYearsAgo = new Date(effectiveDate.setFullYear(effectiveDate.getFullYear() - 3));
-                        if (saleDate < threeYearsAgo) {
-                            addValidationMessage('error', `⚠️ Validation Error: The 'Date of Prior Sale/Transfer' (${priorSaleDate}) must be within 3 years of the effective date (${effectiveDateStr}).`);
-                        }
-                    } else if (!effectiveDateStr && !isDateBlank) {
-                        addValidationMessage('warning', "ℹ️ Info: Could not verify the 3-year sale history window because the report's effective date was not found. Please visit the 'Reconciliation' section first.");
-                    }
-                }
-                {% endif %}
-
-                {% if section_key == 'sale_history' %}
-                // --- Validation for Comparable Sales History ---
-                const compResearchFieldIdentifier = "My research ______ reveal any prior sales or transfers of the comparable sales for the year prior to the date of sale of the comparable sale.(did/did not)";
-                let compResearchValue = null;
-
-                // Find the value from the "Research and Analysis" table
-                const researchAndAnalysisTableForComp = document.querySelector('h3:last-of-type + table');
-                if (researchAndAnalysisTableForComp) {
-                    Array.from(researchAndAnalysisTableForComp.querySelectorAll('tbody tr')).forEach(row => {
-                        const fieldCell = row.querySelector('td:first-child');
-                        if (fieldCell && fieldCell.textContent.trim() === compResearchFieldIdentifier) {
-                            compResearchValue = row.querySelector('td:last-child')?.textContent.trim().toLowerCase();
-                        }
-                    });
-                }
-
-                const priorSaleGridForComp = document.querySelector('h3:first-of-type + table');
-                let compDates = [];
-                let compPrices = [];
-
-                if (priorSaleGridForComp) {
-                    const headerCells = priorSaleGridForComp.querySelectorAll('thead th');
-                    const numComps = headerCells.length - 2; // Exclude 'Feature' and 'Subject'
-
-                    Array.from(priorSaleGridForComp.querySelectorAll('tbody tr')).forEach(row => {
-                        const fieldName = row.querySelector('td:first-child')?.textContent.trim();
-                        if (fieldName === "Date of Prior Sale/Transfer") {
-                            for (let i = 0; i < numComps; i++) {
-                                compDates.push(row.querySelector(`td:nth-child(${i + 3})`)?.textContent.trim());
-                            }
-                        }
-                        if (fieldName === "Price of Prior Sale/Transfer") {
-                            for (let i = 0; i < numComps; i++) {
-                                compPrices.push(row.querySelector(`td:nth-child(${i + 3})`)?.textContent.trim());
-                            }
-                        }
-                    });
-                }
-
-                const isBlank = (val) => !val || val === '--' || val === 'null';
-
-                if (compResearchValue === 'did') {
-                    // At least one comp must have both date and price filled.
-                    const anyCompHasData = compDates.some((date, index) => !isBlank(date) && !isBlank(compPrices[index]));
-                    if (!anyCompHasData) {
-                        addValidationMessage('error', "⚠️ Validation Error: Research for comparable sales 'did' reveal prior sales, but no comparable has both 'Date of Prior Sale/Transfer' and 'Price of Prior Sale/Transfer' filled in the grid.");
-                    } else {
-                        addValidationMessage('success', "✅ Validation successful: Research for comparable sales 'did' reveal prior sales, and at least one comparable has prior sale data.");
-                    }
-                } else if (compResearchValue === 'did not') {
-                    // All comp fields must be blank.
-                    const allCompsAreBlank = compDates.every(isBlank) && compPrices.every(isBlank);
-                    if (!allCompsAreBlank) {
-                        addValidationMessage('error', "⚠️ Validation Error: Research for comparable sales 'did not' reveal prior sales, but some comparables have data in the 'Date' or 'Price' of prior sale fields. These should be blank.");
-                    } else {
-                        addValidationMessage('success', "✅ Validation successful: Research for comparable sales 'did not' reveal prior sales, and all comparable prior sale fields are correctly blank.");
-                    }
-                } else {
-                    // The checkbox cannot be blank.
-                    addValidationMessage('error', "⚠️ Validation Error: The field 'My research ______ reveal any prior sales or transfers of the comparable sales...' cannot be blank. Please select 'did' or 'did not'.");
-                }
-                {% endif %}
-
-                {% if section_key == 'sale_history' %}
-                // Validation for Sale History research
-                const researchFieldIdentifier = "I ____ research the sale or transfer history of the subject property and comparable sales.(did/did not)";
-                let researchValue = null;
-                let explanationValue = null;
-
-                tableRows.forEach(row => {
-                    const fieldCell = row.querySelector('td:first-child');
-                    if (fieldCell) {
-                        const fieldName = fieldCell.textContent.trim();
-                        if (fieldName === researchFieldIdentifier) {
-                            researchValue = row.querySelector('td:last-child')?.textContent.trim().toLowerCase();
-                        }
-                        if (fieldName === "If not, explain") {
-                            explanationValue = row.querySelector('td:last-child')?.textContent.trim();
-                        }
-                    }
-                });
-
-                const messageDiv = document.createElement('div');
-                messageDiv.classList.add('validation-message');
-
-                if (researchValue === 'did not') {
-                    messageDiv.classList.add('error'); // Use the critical error style
-                    messageDiv.innerHTML = `<strong>⚠️ CRITICAL ERROR: Research for sale or transfer history must be performed. This field cannot be marked 'did not'.</strong>`;
-                } else if (researchValue === 'did') {
-                    messageDiv.classList.add('validation-success');
-                    messageDiv.textContent = `✅ Validation successful: Research for sale or transfer history was performed ('did').`;
-                } else {
-                    messageDiv.classList.add('validation-error');
-                    messageDiv.textContent = `⚠️ Validation warning: The research field for sale or transfer history must be marked 'did' or 'did not'. It is currently blank.`;
-                }
-                validationContainer.appendChild(messageDiv);
-                {% endif %}
-
                 {% if section_key == 'sales_grid' %}
                 // Store the 'Indicated Value by Sales Comparison Approach' for cross-validation
                 // The structure is different for the sales grid, so we find the specific cell
@@ -2992,30 +2437,30 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                 }
                 {% endif %}
 
-                {% if section_key == 'cost_approach' %}
-                // Validation for required Cost Approach fields
-                const missingFields = [];
-                tableRows.forEach(row => {
-                    const fieldCell = row.querySelector('td:first-child');
-                    const valueCell = row.querySelector('td:last-child');
-                    const value = valueCell.textContent.trim();
+                // {% if section_key == 'cost_approach' %}
+                // // Validation for required Cost Approach fields
+                // const missingFields = [];
+                // tableRows.forEach(row => {
+                //     const fieldCell = row.querySelector('td:first-child');
+                //     const valueCell = row.querySelector('td:last-child');
+                //     const value = valueCell.textContent.trim();
 
-                    if (!value || value === '--' || value === 'null') {
-                        missingFields.push(fieldCell.textContent.trim());
-                    }
-                });
+                //     if (!value || value === '--' || value === 'null') {
+                //         missingFields.push(fieldCell.textContent.trim());
+                //     }
+                // });
 
-                const messageDiv = document.createElement('div');
-                messageDiv.classList.add('validation-message');
-                if (missingFields.length > 0) {
-                    messageDiv.classList.add('validation-error');
-                    messageDiv.textContent = `⚠️ Validation warning: All Cost Approach fields should be filled. The following fields are empty: ${missingFields.join(', ')}.`;
-                } else {
-                    messageDiv.classList.add('validation-success');
-                    messageDiv.textContent = '✅ Validation successful: All fields in the Cost Approach section are filled.';
-                }
-                validationContainer.appendChild(messageDiv);
-                {% endif %}
+                // const messageDiv = document.createElement('div');
+                // messageDiv.classList.add('validation-message');
+                // if (missingFields.length > 0) {
+                //     messageDiv.classList.add('validation-error');
+                //     messageDiv.textContent = `⚠️ Validation warning: All Cost Approach fields should be filled. The following fields are empty: ${missingFields.join(', ')}.`;
+                // } else {
+                //     messageDiv.classList.add('validation-success');
+                //     messageDiv.textContent = '✅ Validation successful: All fields in the Cost Approach section are filled.';
+                // }
+                // validationContainer.appendChild(messageDiv);
+                // {% endif %}
 
                 {% if section_key == 'certification' %}
                 // --- Helper function to get a field's value ---
@@ -3135,9 +2580,78 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                 } else {
                     addValidationMessage('warning', "ℹ️ Info: Could not find the full address from the Subject section to compare. Please visit the Subject section first.");
                 }
+                {% endif %}
 
+                {% if section_key == 'cost_approach' %}
+                // --- Cost Approach vs. Reconciliation Validation ---
+                async function validateCostApproachValue() {
+                    // Find the specific cell for "Indicated Value By Cost Approach"
+                    const costApproachRow = Array.from(document.querySelectorAll('tbody tr')).find(r => r.querySelector('td:first-child strong')?.textContent.trim() === "Indicated Value By Cost Approach");
+                    const costApproachValue = costApproachRow ? costApproachRow.querySelector('td:last-child strong')?.textContent.trim() : null;
 
+                    // Helper function to add messages, defined earlier in the script
+                    const addValidationMessage = (type, message) => { validationContainer.innerHTML += `<div class="validation-message validation-${type}">${message}</div>`; };
 
+                    try {
+                        const response = await fetch(`/api/data/{{ filename }}/reconciliation/`);
+                        const reconData = await response.json();
+
+                        if (reconData && !reconData.error) {
+                            const reconValue = reconData["Cost Approach (if developed) $"];
+
+                            const normalize = (val) => val ? String(val).replace(/[$,]/g, '').trim() : null;
+
+                            const normCostApproach = normalize(costApproachValue);
+                            const normRecon = normalize(reconValue);
+
+                            if (normCostApproach && normRecon && normCostApproach === normRecon) {
+                                addValidationMessage('success', `✅ Value matches Reconciliation: The 'Indicated Value By Cost Approach' (${costApproachValue}) is consistent with the 'Cost Approach (if developed) $' value in the Reconciliation section.`);
+                            } else {
+                                addValidationMessage('error', `⚠️ Value Mismatch: 'Indicated Value By Cost Approach' (${costApproachValue || 'N/A'}) does not match the 'Cost Approach (if developed) $' value (${reconValue || 'N/A'}) from the Reconciliation section.`);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error fetching reconciliation data for validation:', error);
+                    }
+                }
+                validateCostApproachValue();
+                {% endif %}
+
+                {% if section_key == 'income_approach' %}
+                // --- Income Approach vs. Reconciliation Validation ---
+                async function validateIncomeApproachValue() {
+                    // Find the value for "Indicated Value by Income Approach" from the current table
+                    const incomeApproachRow = Array.from(document.querySelectorAll('tbody tr')).find(r => r.querySelector('td:first-child')?.textContent.trim() === "Indicated Value by Income Approach");
+                    const incomeApproachValue = incomeApproachRow ? incomeApproachRow.querySelector('td:last-child')?.textContent.trim() : null;
+
+                    // Helper function to add messages
+                    const addValidationMessage = (type, message) => { validationContainer.innerHTML += `<div class="validation-message validation-${type}">${message}</div>`; };
+
+                    try {
+                        const response = await fetch(`/api/data/{{ filename }}/reconciliation/`);
+                        const reconData = await response.json();
+
+                        if (reconData && !reconData.error) {
+                            const reconValue = reconData["Income Approach (if developed) $"];
+
+                            const normalize = (val) => val ? String(val).replace(/[$,]/g, '').trim() : null;
+
+                            const normIncomeApproach = normalize(incomeApproachValue);
+                            const normRecon = normalize(reconValue);
+
+                            if (normIncomeApproach && normRecon && normIncomeApproach === normRecon) {
+                                addValidationMessage('success', `✅ Value matches Reconciliation: The 'Indicated Value by Income Approach' (${incomeApproachValue}) is consistent with the 'Income Approach (if developed) $' value in the Reconciliation section.`);
+                            } else {
+                                addValidationMessage('error', `⚠️ Value Mismatch: 'Indicated Value by Income Approach' (${incomeApproachValue || 'N/A'}) does not match the 'Income Approach (if developed) $' value (${reconValue || 'N/A'}) from the Reconciliation section.`);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error fetching reconciliation data for validation:', error);
+                        addValidationMessage('error', 'Could not fetch Reconciliation data for validation.');
+                    }
+                }
+                // Run the async validation
+                validateIncomeApproachValue();
                 {% endif %}
 
                 {% if section_key == 'certification' %}
@@ -3202,7 +2716,6 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                 }
                 {% endif %}
 
-
                 {% if section_key == 'market_conditions' %}
                 // Validation for Market Conditions Inventory Analysis
                 const inventoryFieldPrefix = "Inventory Analysis";
@@ -3235,6 +2748,234 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                     validationContainer.appendChild(messageDiv);
                 }
 
+                {% endif %}
+
+                {% if section_key == 'custom_analysis' %}
+                // Validation for GLA Consistency custom analysis
+                const customPrompt = `{{ custom_prompt|escapejs }}`.toLowerCase().trim();
+                const analysisSummary = `{{ data.analysis_summary|escapejs }}`.toLowerCase();
+                const glaConsistencyPrompt = "check for any discrepancies in the gross living area (gla) across all sections of the report.";
+
+                if (customPrompt === glaConsistencyPrompt && analysisSummary) {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message');
+                    if (analysisSummary.includes('consistent') || analysisSummary.includes('no discrepancies') || analysisSummary.includes('consistently') || analysisSummary.includes('verified') || analysisSummary.includes('match')) {
+                        messageDiv.classList.add('validation-success');
+                        messageDiv.textContent = '✅ Validation Passed: The analysis summary indicates that the GLA is consistent.';
+                    } else {
+                        messageDiv.classList.add('validation-error');
+                        messageDiv.textContent = '⚠️ Validation Failed: The analysis summary indicates a potential inconsistency in the GLA. Please review the findings.';
+                    }
+                    validationContainer.appendChild(messageDiv);
+                }
+
+                // Validation for Subject Address and Photo custom analysis
+                const subjectAddressPrompt = "verify that the subject property address is consistent across the subject section, sales grid, location map, and aerial map\n\nalso please confirm subject street, front and rear photo are present and no duplicates.";
+
+                if (customPrompt === subjectAddressPrompt && analysisSummary) {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message');
+                    if (analysisSummary.includes('consistently') || analysisSummary.includes('verified') || analysisSummary.includes('match') || analysisSummary.includes('no discrepancies') || analysisSummary.includes('consistently') || analysisSummary.includes('present') || analysisSummary.includes('no duplicates')) {
+                        messageDiv.classList.add('validation-success');
+                        messageDiv.textContent = '✅ Validation Passed: The analysis summary indicates that the subject address and photos are consistent and present.';
+                    } else {
+                        messageDiv.classList.add('validation-error');
+                        messageDiv.textContent = '⚠️ Validation Failed: The analysis summary indicates a potential issue with the subject address or photos. Please review the findings.';
+                    }
+                    validationContainer.appendChild(messageDiv);
+                }
+
+                // Validation for Compare Room Counts custom analysis
+                const roomCountsPrompt = "compare the bedroom and bathroom counts between the improvements section, sales grid, and all available floor plans/ sktech/ building sketch and all photos.";
+
+                if (customPrompt === roomCountsPrompt && analysisSummary) {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message');
+                    if ((analysisSummary.includes('consistent') || analysisSummary.includes('match')) && (analysisSummary.includes('distinct photos') || analysisSummary.includes('no duplicate') || analysisSummary.includes('consistently'))) {
+                        messageDiv.classList.add('validation-success');
+                        messageDiv.textContent = '✅ Validation Passed: The analysis summary indicates that the room counts are consistent.';
+                    } else if (analysisSummary.includes('discrepancy') || analysisSummary.includes('however')) {
+                        messageDiv.classList.add('validation-warning');
+                        messageDiv.textContent = '⚠️ Partial Validation: A discrepancy was noted. Please review the findings manually.';
+                    } else {
+                        messageDiv.classList.add('validation-error');
+                        messageDiv.textContent = '❌ Validation Failed: The analysis summary indicates a potential inconsistency in room counts. Please review the findings.';
+                    }
+                    validationContainer.appendChild(messageDiv);
+                }
+
+                // Validation for Verify Comparable Address and Photos custom analysis
+                const compAddressPrompt = "match all comparable property addresses between the sales grid, photo pages, and the location map.\n\nalso please confirm no duplicates.";
+
+                if (customPrompt === compAddressPrompt && analysisSummary) {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message');
+                    if ((analysisSummary.includes('consistent') || analysisSummary.includes('match')) && (analysisSummary.includes('distinct photos') || analysisSummary.includes('no duplicate') || analysisSummary.includes('consistently') || analysisSummary.includes('distinct'))) {
+                        messageDiv.classList.add('validation-success');
+                        messageDiv.textContent = '✅ Validation Passed: The analysis summary indicates that comparable addresses are consistent and photos are not duplicated.';
+                    } else {
+                        messageDiv.classList.add('validation-error');
+                        messageDiv.textContent = '⚠️ Validation Failed: The analysis summary indicates a potential issue with comparable addresses or duplicate photos. Please review the findings.';
+                    }
+                    validationContainer.appendChild(messageDiv);
+                }
+
+                // Validation for Verify Photo Lables custom analysis
+                const photoLabelsPrompt = "verify all photo labels and no duplicate photos";
+
+                if (customPrompt === photoLabelsPrompt && analysisSummary) {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message');
+                    // Check for success keywords vs failure keywords.
+                    if (analysisSummary.includes('no duplicate photos were found')) {
+                        messageDiv.classList.add('validation-success');
+                        messageDiv.textContent = '✅ Validation Passed: The analysis summary indicates all photos have labels and no duplicates were found.';
+                    } else if (analysisSummary.includes('duplicate photos were found')) {
+                        messageDiv.classList.add('validation-error');
+                        messageDiv.textContent = '⚠️ Validation Failed: The analysis summary indicates that duplicate photos were found. Please review the findings.';
+                    } else {
+                        messageDiv.classList.add('validation-warning');
+                        messageDiv.textContent = '❓ Validation Inconclusive: The analysis summary for photo labels could not be definitively categorized. Please review manually.';
+                    }
+                    validationContainer.appendChild(messageDiv);
+                }
+
+                // Validation for ADU Criteria Check
+                const aduCriteriaPrompt = "check  'one with accessory unit' is selected in improvements section, the following criteria must be met:\n\n1.  this box should be checked if there is an additional dwelling with both a kitchen (containing a stove) and a bath.\n    *   if there is interior access, the adu may be included in the main unit's details.\n    *   if there is no interior access, the adu must be listed as a separate line item.\n    *   if the adu is considered a second floor, it may be included in the main unit's details.\n\n2.  if the additional dwelling lacks either a kitchen or a bath, 'one with accessory unit' must be unchecked.\n\n3.  if a basement contains a kitchen and bath, 'one with accessory unit' can be checked or unchecked.\n\n4.  a room labeled 'kitchenette' should not have a stove; in this case, no health and safety comment is needed. however, if a kitchenette does contain a stove, escalate with a comment (permitted/health or safety).\n\n    escalation language: on page #, a room labeled as 'kitchenette' has a stove. please advise.";
+
+                if (customPrompt === aduCriteriaPrompt && analysisSummary) {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message');
+                    // Check for success keywords vs failure keywords.
+                    if (analysisSummary.includes("report's selection aligns with the provided criteria") || analysisSummary.includes("correctly checked") || analysisSummary.includes("correctly unchecked") || analysisSummary.includes("checked") || analysisSummary.includes("unchecked")) {
+                        messageDiv.classList.add('validation-success');
+                        messageDiv.textContent = '✅ Validation Passed: The ADU selection aligns with the analysis criteria.';
+                    } else if (analysisSummary.includes("does not align") || analysisSummary.includes("incorrectly checked") || analysisSummary.includes("discrepancy")) {
+                        messageDiv.classList.add('validation-error');
+                        messageDiv.textContent = '⚠️ Validation Failed: The analysis summary indicates a discrepancy with the ADU criteria. Please review the findings.';
+                    } else {
+                        messageDiv.classList.add('validation-warning');
+                        messageDiv.textContent = '❓ Validation Inconclusive: The ADU criteria analysis could not be definitively categorized. Please review manually.';
+                    }
+                    validationContainer.appendChild(messageDiv);
+                }
+                {% endif %}
+
+                {% if section_key == 'sales_grid_adjustment' %}
+                // Validation for Sales Grid Adjustment analysis results
+                const analysisDetails = {{ data.adjustment_analysis.details|safe }};
+
+                if (analysisDetails && Array.isArray(analysisDetails)) {
+                    analysisDetails.forEach(detail => {
+                        const messageDiv = document.createElement('div');
+                        messageDiv.classList.add('validation-message');
+                        const detailLower = detail.toLowerCase();
+
+                        // Determine message type based on keywords
+                        if (detailLower.includes('failed') || detailLower.includes('inconsistent') || detailLower.includes('exceeds') || detailLower.includes('error')) {
+                            messageDiv.classList.add('validation-error');
+                            messageDiv.innerHTML = `❌ ${detail}`;
+                        } else if (detailLower.includes('passed') || detailLower.includes('consistent')) {
+                            messageDiv.classList.add('validation-success');
+                            messageDiv.innerHTML = `✅ ${detail}`;
+                        } else {
+                            messageDiv.classList.add('validation-warning');
+                            messageDiv.innerHTML = `⚠️ ${detail}`;
+                        }
+                        validationContainer.appendChild(messageDiv);
+                    });
+                } else {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message', 'validation-error');
+                    messageDiv.textContent = '⚠️ Could not find adjustment analysis details to validate.';
+                    validationContainer.appendChild(messageDiv);
+                }
+                {% endif %}
+
+                {% if section_key == 'sale_history' %}
+                // --- Sale History Section Validation ---
+                const researchAndAnalysisTable = document.querySelectorAll('table')[1]; // Second table on the page
+                const gridTable = document.querySelectorAll('table')[0]; // First table
+
+                const getResearchFieldValue = (fieldName) => {
+                    const row = Array.from(researchAndAnalysisTable.querySelectorAll('tbody tr')).find(r => r.querySelector('td:first-child')?.textContent.trim().startsWith(fieldName));
+                    return row ? row.querySelector('td:last-child')?.textContent.trim() : null;
+                };
+
+                const isEmpty = (val) => !val || val === '--' || val === 'null';
+
+                // Rule 1: Check required fields in Research and Analysis
+                const requiredResearchFields = [
+                    "I ____ research the sale or transfer history",
+                    "My research _____ reveal any prior sales or transfers of the subject property",
+                    "Data Source(s) for subject property research",
+                    "My research ______ reveal any prior sales or transfers of the comparable sales",
+                    "Data Source(s) for comparable sales research",
+                    "Analysis of prior sale or transfer history"
+                ];
+                const missingResearchFields = requiredResearchFields.filter(field => isEmpty(getResearchFieldValue(field)));
+
+                if (missingResearchFields.length > 0) {
+                    addValidationMessage('error', `⚠️ Validation Failed: The following required fields in the 'Research and Analysis' section are empty: ${missingResearchFields.join(', ')}.`);
+                } else {
+                    addValidationMessage('success', `✅ Validation Passed: All required 'Research and Analysis' fields are filled.`);
+                }
+
+                // Rule 2: "I ____ research..." must be "did"
+                const researchPerformed = getResearchFieldValue("I ____ research the sale or transfer history");
+                if (researchPerformed && researchPerformed.toLowerCase() !== 'did') {
+                    addValidationMessage('error', `⚠️ Validation Failed: 'I ____ research the sale or transfer history...' must be marked 'did', but it is '${researchPerformed}'.`);
+                } else if (researchPerformed) {
+                    addValidationMessage('success', `✅ Validation Passed: Research was performed ('did').`);
+                }
+
+                // Rule 3: Conditional validation for Subject prior sale
+                const subjectHistoryFound = getResearchFieldValue("My research _____ reveal any prior sales or transfers of the subject property");
+                if (subjectHistoryFound && subjectHistoryFound.toLowerCase() === 'did') {
+                    const subjectDateRow = Array.from(gridTable.querySelectorAll('tbody tr')).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Date of Prior Sale/Transfer');
+                    const subjectPriceRow = Array.from(gridTable.querySelectorAll('tbody tr')).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Price of Prior Sale/Transfer');
+
+                    const subjectDate = subjectDateRow ? subjectDateRow.querySelector('td:nth-child(2)')?.textContent.trim() : null;
+                    const subjectPrice = subjectPriceRow ? subjectPriceRow.querySelector('td:nth-child(2)')?.textContent.trim() : null;
+
+                    if (isEmpty(subjectDate) || isEmpty(subjectPrice)) {
+                        addValidationMessage('error', `⚠️ Validation Failed: Report indicates a prior sale for the Subject was found, but 'Date of Prior Sale/Transfer' or 'Price of Prior Sale/Transfer' is missing in the grid.`);
+                    } else {
+                        addValidationMessage('success', `✅ Validation Passed: Subject prior sale details are present as required.`);
+                    }
+                }
+
+                // Rule 4: Conditional validation for Comparables' prior sales
+                const compHistoryFound = getResearchFieldValue("My research ______ reveal any prior sales or transfers of the comparable sales");
+                if (compHistoryFound && compHistoryFound.toLowerCase() === 'did') {
+                    const compDateRow = Array.from(gridTable.querySelectorAll('tbody tr')).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Date of Prior Sale/Transfer');
+                    const compPriceRow = Array.from(gridTable.querySelectorAll('tbody tr')).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Price of Prior Sale/Transfer');
+
+                    if (compDateRow && compPriceRow) {
+                        const compDateCells = Array.from(compDateRow.querySelectorAll('td')).slice(2); // Skip Feature and Subject columns
+                        const compPriceCells = Array.from(compPriceRow.querySelectorAll('td')).slice(2);
+
+                        let allCompsHaveData = true;
+                        let compsWithMissingData = [];
+
+                        // Check if at least one comparable has data.
+                        let atLeastOneCompHasData = false;
+                        for (let i = 0; i < compDateCells.length; i++) {
+                            const date = compDateCells[i].textContent.trim();
+                            const price = compPriceCells[i].textContent.trim();
+                            if (!isEmpty(date) && !isEmpty(price)) {
+                                atLeastOneCompHasData = true;
+                                break;
+                            }
+                        }
+
+                        if (!atLeastOneCompHasData) {
+                            addValidationMessage('error', `⚠️ Validation Failed: Report indicates prior sales for Comparables were found, but no comparable has both 'Date of Prior Sale/Transfer' and 'Price of Prior Sale/Transfer' filled in the grid.`);
+                        } else {
+                            addValidationMessage('success', `✅ Validation Passed: At least one comparable has prior sale details as required.`);
+                        }
+                    }
+                }
                 {% endif %}
 
                 {% if section_key == 'pud_info' %}
