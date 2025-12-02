@@ -42,7 +42,7 @@ NEIGHBORHOOD_FIELDS = [
 # SITE
 SITE_FIELDS = [
     "Dimensions", "Area", "Shape", "View", "Specific Zoning Classification", "Zoning Description",
-    "Zoning Compliance", "Is the highest and best use of subject property as improved (or as proposed per plans and specifications) the present use?",
+    "Zoning Compliance", "Zoning Compliance Comment", "Is the highest and best use of subject property as improved (or as proposed per plans and specifications) the present use?",
     "Electricity", "Gas", "Water", "Sanitary Sewer", "Street", "Alley", "FEMA Special Flood Hazard Area",
     "FEMA Flood Zone", "FEMA Map #", "FEMA Map Date", "Are the utilities and off-site improvements typical for the market area?",
     "Are there any adverse site conditions or external factors (easements, encroachments, environmental conditions, land uses, etc.)(Yes/No)?",
@@ -195,7 +195,7 @@ COST_APPROACH_FIELDS = [
     "Depreciation",
     "Depreciated Cost of Improvements",
     "As-is Value of Site Improvements",
-    "Indicated Value By Cost Approach $",
+    "Indicated Value By Cost Approach",
     # Comments and Other Fields
     "Comments on Cost Approach (gross living area calculations, depreciation, etc.)",
     "Estimated Remaining Economic Life (HUD and VA only)",
@@ -821,6 +821,7 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
             *   For yes/no questions, extract the "Yes" or "No" answer.
             *   For the field "Are there any adverse site conditions...", if the answer is "Yes", you must extract the explanation into the "If Yes, describe" field. If the answer is "No", the "If Yes, describe" field should be `null`.
             *   For fields like "Zoning Compliance", extract the specific classification (e.g., "Legal", "Legal Nonconforming", "Illegal", "No Zoning").
+            *   **Conditional Extraction for "Zoning Compliance Comment":** If the value for "Zoning Compliance" is "No Zoning" or "Legal Nonconforming", you must find and extract the accompanying comment, which often discusses rebuild rights, into the "Zoning Compliance Comment" field. If "Zoning Compliance" is any other value (like "Legal" or "Illegal"), the "Zoning Compliance Comment" field must be `null`.
 
             *   For the "Street" field, you must extract both its status (Public or Private) and its surface type (e.g., Asphalt, Concrete, Dirt). The final value should be in the format "Status/Type", for example, "Public/Asphalt".
             *   For utility fields ("Electricity", "Gas", "Water", "Sanitary Sewer"), if "Other" is selected, you must include the accompanying description (e.g., "Other - Solar", "Other - Septic"). If no description is provided with "Other", extract just "Other".
@@ -833,6 +834,7 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
             "Dimensions": "80x120",
             "Area": "9,600 Sq. Ft.",
             "Zoning Compliance": "Legal",
+            "Zoning Compliance Comment": null,
             "Is the highest and best use of subject property as improved (or as proposed per plans and specifications) the present use?": "Yes",
             "FEMA Special Flood Hazard Area": "No",
             "FEMA Flood Zone": "X",
@@ -1058,7 +1060,7 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
             "Depreciation": "$50,000",
             "Depreciated Cost of Improvements": "$425,000",
             "As-is Value of Site Improvements": "$10,000",
-            "Indicated Value By Cost Approach $": "535,000",
+            "Indicated Value By Cost Approach": "$535,000",
             "Comments on Cost Approach (gross living area calculations, depreciation, etc.)": "Depreciation estimated using the age-life method. GLA calculations are consistent with the building sketch.",
             "Estimated Remaining Economic Life (HUD and VA only)": "50 Years"
         }}

@@ -1724,15 +1724,29 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                             messageDiv.innerHTML = `<strong>⚠️ CRITICAL WARNING: Zoning Description contains 'Agriculture'/'agr'. This is not acceptable.</strong>`;
                             validationContainer.appendChild(messageDiv);
                         }
-
+                        
                         // 4. Zoning Compliance validation
                         if (fieldName === 'Zoning Compliance') {
+                            const complianceValue = value;
+                            const commentRow = Array.from(tableRows).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Zoning Compliance Comment');
+                            const commentValue = commentRow ? commentRow.querySelector('td:last-child')?.textContent.trim() : null;
+                            const isCommentEmpty = !commentValue || commentValue === '--' || commentValue === 'null';
+
                             const messageDiv = document.createElement('div');
                             messageDiv.classList.add('validation-message');
-                            if (value === 'Legal') {
+
+                            if (complianceValue === 'Legal') {
                                 messageDiv.classList.add('validation-success');
                                 messageDiv.textContent = '✅ Zoning Compliance is "Legal".';
-                            } else if (value === 'Illegal') {
+                            } else if (['Legal Nonconforming', 'No Zoning'].includes(complianceValue)) {
+                                if (isCommentEmpty) {
+                                    messageDiv.classList.add('validation-warning');
+                                    messageDiv.textContent = `⚠️ Warning: Zoning Compliance is "${complianceValue}". Please ensure a comment/explanation is provided in the report.`;
+                                } else {
+                                    messageDiv.classList.add('validation-success');
+                                    messageDiv.textContent = `✅ Zoning Compliance is "${complianceValue}" and a comment has been provided.`;
+                                }
+                            } else if (complianceValue === 'Illegal') {
                                 messageDiv.classList.add('error');
                                 messageDiv.innerHTML = `<strong>⚠️ CRITICAL WARNING: Zoning Compliance is "Illegal". Please stop review and freeze further modules.</strong>`;
                                 document.querySelectorAll('.sidebar a:not(.active)').forEach(link => {
@@ -1740,9 +1754,6 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                                     link.style.opacity = '0.5';
                                     link.title = 'Navigation disabled due to critical error.';
                                 });
-                            } else if (['Legal Nonconforming', 'No Zoning'].includes(value)) {
-                                messageDiv.classList.add('validation-warning');
-                                messageDiv.textContent = `⚠️ Warning: Zoning Compliance is "${value}". Please ensure a comment/explanation is provided in the report.`;
                             }
                             validationContainer.appendChild(messageDiv);
                         }
