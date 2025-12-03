@@ -184,6 +184,58 @@ async def compare_pdfs_process_view(request):
     return await sync_to_async(redirect)('compare_pdfs_upload')
 
 @login_required
+async def update_file_custom_analysis_view(request):
+    """
+    Handles custom analysis prompts for the Update File Review, using context from all uploaded files.
+    """
+    if request.method == 'POST':
+        fs = FileSystemStorage()
+        filename1 = request.POST.get('filename1')
+        filename2 = request.POST.get('filename2')
+        html_filename = request.POST.get('html_filename')
+        purchase_filename = request.POST.get('purchase_filename')
+        engagement_filename = request.POST.get('engagement_filename')
+        custom_prompt = request.POST.get('custom_prompt')
+
+        if not all([filename1, filename2, custom_prompt]):
+            messages.error(request, "Missing required file information for custom analysis.")
+            return await sync_to_async(redirect)('compare_pdfs_upload')
+
+        # --- Build list of file paths for analysis ---
+        paths_for_analysis = []
+        pdf1_path = await sync_to_async(fs.path)(filename1)
+        pdf2_path = await sync_to_async(fs.path)(filename2)
+        paths_for_analysis.extend([pdf1_path, pdf2_path])
+
+        # --- Re-run initial comparison to get context ---
+        # This ensures the page is fully populated with the original comparison data
+        comparison_results = await compare_pdfs(pdf1_path, pdf2_path)
+
+        # --- Call AI for custom analysis ---
+        custom_analysis_results = await extract_fields_from_pdf(
+            pdf_paths=paths_for_analysis,
+            section_name='custom_analysis',
+            custom_prompt=(
+                f"User Query: '''{custom_prompt}'''\n\n"
+                "Analyze all provided documents (a revised appraisal report and an old one) to answer the user's query. "
+                "The first file is the revised report, and the second is the old one."
+            )
+        )
+
+        # --- Render results page with new analysis data ---
+        context = {
+            'results': comparison_results,
+            'custom_analysis_results': custom_analysis_results,
+            'custom_prompt': custom_prompt,
+            'html_filename': html_filename,
+            'purchase_filename': purchase_filename,
+            'engagement_filename': engagement_filename,
+        }
+        return await sync_to_async(render)(request, 'compare_results.html', context)
+
+    return await sync_to_async(redirect)('compare_pdfs_upload')
+
+@login_required
 def d1004_file_review_upload_view(request):
     """Handles the GET request to display the 1004D file review upload form."""
     return render(request, 'd1004_file_review_upload.html')
@@ -207,6 +259,7 @@ async def d1004_file_review_process_view(request):
         html_data = None
         purchase_data = None
         html_filename_for_context = None
+        purchase_filename_for_context = None
 
         if html_file:
             html_filename = await sync_to_async(fs.save)(html_file.name, html_file)
@@ -216,6 +269,7 @@ async def d1004_file_review_process_view(request):
         
         if purchase_copy_file:
             purchase_filename = await sync_to_async(fs.save)(purchase_copy_file.name, purchase_copy_file)
+            purchase_filename_for_context = purchase_filename
             purchase_path = await sync_to_async(fs.path)(purchase_filename)
             purchase_data = await extract_fields_from_pdf(purchase_path, 'contract')
 
@@ -224,11 +278,11 @@ async def d1004_file_review_process_view(request):
         # Add filenames to the results dictionary so they can be accessed in the template for the custom analysis form.
         comparison_results['original_filename'] = original_filename
         comparison_results['d1004_filename'] = d1004_filename
+        comparison_results['html_filename'] = html_filename_for_context
+        comparison_results['purchase_filename'] = purchase_filename_for_context
 
         context = {
             'results': comparison_results,
-            'has_html': html_data is not None,
-            'html_filename': html_filename_for_context
         }
         return await sync_to_async(render)(request, 'd1004_result.html', context)
     return await sync_to_async(redirect)('d1004_file_review_upload')
@@ -243,6 +297,7 @@ async def d1004_custom_analysis_view(request):
         original_filename = request.POST.get('original_filename')
         d1004_filename = request.POST.get('d1004_filename')
         html_filename = request.POST.get('html_filename')
+        purchase_filename = request.POST.get('purchase_filename')
         custom_prompt = request.POST.get('custom_prompt')
 
         if not original_filename or not d1004_filename or not custom_prompt:
@@ -254,20 +309,31 @@ async def d1004_custom_analysis_view(request):
 
         # Initialize the list of paths for analysis with the core PDF documents
         pdf_paths_for_analysis = [original_pdf_path, d1004_pdf_path]
+        all_files_context_for_prompt = {}
 
         # 1. Extract HTML data if available to build context
         html_data = None
         if html_filename and await sync_to_async(fs.exists)(html_filename):
             html_file_path = await sync_to_async(fs.path)(html_filename)
-            html_data = await sync_to_async(_extract_from_html_file)(html_file_path) # This extracts data for the prompt
-            # Add the HTML file to the list of documents to be analyzed by the AI
-            pdf_paths_for_analysis.append(html_file_path)
+            html_data = await sync_to_async(_extract_from_html_file)(html_file_path)
+            all_files_context_for_prompt['order_form_data'] = html_data
 
-        # 2. Re-run the initial 1004D comparison to get structured data for context, now including HTML data if present.
+        # Re-run the initial comparison to get the base results to display on the page
         initial_comparison_results = await compare_1004d(original_pdf_path, d1004_pdf_path, html_data)
+        # Add filenames back into results for the template forms
+        initial_comparison_results['original_filename'] = original_filename
+        initial_comparison_results['d1004_filename'] = d1004_filename
+        initial_comparison_results['html_filename'] = html_filename
+        initial_comparison_results['purchase_filename'] = purchase_filename
 
-        # 4. Call the AI for custom analysis, now passing all available documents.
-        # The AI will receive a prompt and two documents to analyze.
+        # Add purchase contract data if available
+        if purchase_filename and await sync_to_async(fs.exists)(purchase_filename):
+            purchase_file_path = await sync_to_async(fs.path)(purchase_filename)
+            purchase_data = await extract_fields_from_pdf(purchase_file_path, 'contract')
+            all_files_context_for_prompt['purchase_contract_data'] = purchase_data
+
+
+        # Call the AI for custom analysis, passing all available documents.
         custom_analysis_results = await extract_fields_from_pdf(
             pdf_paths=pdf_paths_for_analysis,
             section_name='custom_analysis',
@@ -275,24 +341,13 @@ async def d1004_custom_analysis_view(request):
                 f"User Query: '''{custom_prompt}'''\n\n"
                 "Analyze all provided documents (original appraisal, 1004D form, and HTML order form if present) to answer the user's query. "
                 "Use the following pre-processed JSON data as the primary source for your analysis and to cross-reference information. "
-                "Do not state that the HTML form was not provided if its data is present in the JSON below.\n"
-                f"Order Form Data: {json.dumps(html_data)}"
+                f"Context Data: {json.dumps(all_files_context_for_prompt)}"
             )
         )
 
-        # Add the filename to the html_data so it can be passed back to the template context
-        # This is done after the AI call to not interfere with the prompt context
-        if html_data:
-            html_data['filename'] = html_filename
-
-
-        # 5. Render the results page again with the new analysis data
+        # Render the results page again with the new analysis data
         context = {
             'results': initial_comparison_results,
-            'original_filename': original_filename,
-            'd1004_filename': d1004_filename,
-            'has_html': html_data is not None,
-            'html_filename': html_filename,
             'custom_analysis_results': custom_analysis_results,
             'custom_prompt': custom_prompt # Pass the prompt back to display it
         }

@@ -11,6 +11,7 @@ urlpatterns = [
     path('extract/<str:filename>/<str:section_name>/', views.extract_section, name='extract_section'),
     path('compare/', views.compare_pdfs_upload_view, name='compare_pdfs_upload'),
     path('compare/process/', views.compare_pdfs_process_view, name='compare_pdfs_process'),
+    path('compare/custom-analysis/', views.update_file_custom_analysis_view, name='update_file_custom_analysis'),
     path('compare-html-pdf/', views.compare_html_pdf_upload_view, name='compare_html_pdf_upload'),
     path('compare-html-pdf/process/', views.compare_html_pdf_process_view, name='compare_html_pdf_process'),
     path('generate-report/', views.generate_report, name='generate_report'),

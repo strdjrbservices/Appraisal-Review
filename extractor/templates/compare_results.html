@@ -1,25 +1,26 @@
 {% extends 'base.html' %}
+
 {% load dict_helpers %}
-{% load static %}
-{% block title %}PDF Comparison Results{% endblock %}
+{% block title %}Update File Review Results{% endblock %}
 
 {% block content %}
 <div class="results-container">
-    <h2>Comparison Summary</h2>
+    <h1>Update File Review Results</h1>
 
     {% if results.error %}
-        <div class="alert alert-danger">{{ results.error }}</div>
+        <div class="error-message">
+            <p><strong>Error:</strong> {{ results.error }}</p>
+        </div>
     {% else %}
-
     <div class="summary-grid">
         <div class="summary-card">
-            <h3>PDF 1 (Revised Report)</h3>
-            <p class="filename">{{ filename1 }}</p>
+            <h3>Revised Report</h3>
+            <p class="filename">{{ results.filename1 }}</p>
             <p class="page-count">{{ results.page_count_1 }} Page{{ results.page_count_1|pluralize }}</p>
         </div>
         <div class="summary-card">
-            <h3>PDF 2 (Old Report)</h3>
-            <p class="filename">{{ filename2 }}</p>
+            <h3>Old Report</h3>
+            <p class="filename">{{ results.filename2 }}</p>
             <p class="page-count">{{ results.page_count_2 }} Page{{ results.page_count_2|pluralize }}</p>
         </div>
 
@@ -57,135 +58,157 @@
         {% endif %}
     </div>
 
-    {% if results.html_data or results.purchase_data or results.engagement_data %}
-    <div class="differences-section">
-        <h3>Supporting Data Summary</h3>
-        <div class="diff-details open">
-            <div class="diff-header open">
-                <span>Extracted Data from Supporting Documents</span>
-                <span class="arrow open"></span>
-            </div>
-            <div class="diff-content" style="display: block;">
-                <div class="supporting-data-grid">
-                    {% if results.html_data %}
-                    <div class="data-card">
-                        <h4>Order Form Data</h4>
-                        <p><strong>Client:</strong> {{ results.html_data|get_item:"Client/Lender Name"|default:"-" }}</p>
-                        <p><strong>Borrower:</strong> {{ results.html_data|get_item:"Borrower (and Co-Borrower)"|default:"-" }}</p>
+        {% if results.rejection_reason %}
+        <div class="rejection-reason-card" style="grid-column: 1 / -1;">
+            <h4>Original Rejection Reason</h4>
+            <p>"{{ results.rejection_reason }}"</p>
+            {% if results.revision_check_results %}
+                {% with revision=results.revision_check_results %}
+                    <div class="revision-status-box revision-{{ revision.status|lower }}">
+                        <strong>Revision Status: {{ revision.status }}</strong>
+                        <p>{{ revision.summary }}</p>
+                        <p><em>Details: {{ revision.details }}</em></p>
                     </div>
-                    {% endif %}
-                    {% if results.purchase_data %}
-                    <div class="data-card">
-                        <h4>Purchase Contract Data</h4>
-                        <p><strong>Contract Price:</strong> {{ results.purchase_data|get_item:"Contract Price $"|default:"-" }}</p>
-                        <p><strong>Contract Date:</strong> {{ results.purchase_data|get_item:"Date of Contract"|default:"-" }}</p>
-                    </div>
-                    {% endif %}
-                    {% if results.engagement_data and results.engagement_data.addendum %}
-                    <div class="data-card">
-                        <h4>Engagement Letter Data</h4>
-                        <p><strong>Engagement Fee:</strong> {{ results.engagement_data.addendum|get_item:"Appraisal Fee"|default:results.engagement_data.addendum|get_item:"Total Fee"|default:"-" }}</p>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
+                {% endwith %}
+            {% endif %}
         </div>
-    </div>
-    {% endif %}
-
-
-    <!-- Automatic Revision Check Section -->
-    {% if results.revision_check_results and not results.revision_check_results.error %}
-    <div class="differences-section">
-        <h3>Automatic Revision Check</h3>
-        <div class="diff-details open">
-            <div class="diff-header open">
-                <span>Analysis of Rejection Reason vs. Revised Report</span>
-                <span class="arrow open"></span>
-            </div>
-            <div class="diff-content" style="display: block;">
-                <div class="revision-check-card">
-                    <h4>Rejection Reason from Order Form:</h4>
-                    <p class="rejection-reason"><em>{{ results.rejection_reason|default:"Not found." }}</em></p>
-                    <hr>
-                    <h4>AI Verification Result: <span class="status-badge status-{{ results.revision_check_results.status|lower }}">{{ results.revision_check_results.status }}</span></h4>
-                    <p><strong>Summary:</strong> {{ results.revision_check_results.summary }}</p>
-                    <p><strong>Details:</strong> {{ results.revision_check_results.details }}</p>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    <div class="differences-section">
-        <h3>Findings</h3>
-        {% if not results.differing_pages and not results.extra_pages_1 and not results.extra_pages_2 %}
-            <div class="alert alert-success">
-                No content differences were found between the two documents.
-            </div>
-        {% else %}
-            {% if results.page_count_1 != results.page_count_2 %}
-                <div class="alert alert-warning">
-                    Page counts are different.
-                </div>
-            {% endif %}
-
-            {% if results.extra_pages_1 %}
-            <div class="alert alert-warning" style="margin-top: 1rem;">
-                <p>PDF 1 has extra pages not found in PDF 2:</p>
-                <ul class="page-list">
-                    {% for page_num in results.extra_pages_1 %}
-                        <li>Page {{ page_num }}</li>
-                    {% endfor %}
-                </ul>
-            </div>
-            {% endif %}
-
-            {% if results.extra_pages_2 %}
-            <div class="alert alert-warning" style="margin-top: 1rem;">
-                <p>PDF 2 has extra pages not found in PDF 1:</p>
-                <ul class="page-list">
-                    {% for page_num in results.extra_pages_2 %}
-                        <li>Page {{ page_num }}</li>
-                    {% endfor %}
-                </ul>
-            </div>
-            {% endif %}
-
-            {% if results.differing_pages %}
-            <div class="alert alert-warning">
-                <p>Text content differences were found on matching pages. Click to expand.</p>
-            </div>
-            {% for diff_item in results.differing_pages %}
-            <div class="diff-details">
-                <div class="diff-header">
-                    <span>Page {{ diff_item.page_number }}</span>
-                    <span class="arrow"></span>
-                </div>
-                <div class="diff-content">
-                    {{ diff_item.diff_html|safe }}
-                </div>
-            </div>
-            {% endfor %}
-            {% endif %}
         {% endif %}
-    </div>
 
+        <div class="custom-analysis-section" style="display: flex; gap: 2rem; margin-top: 2rem;">
+            <div style="flex: 1;">
+                <h2>Custom Document Analysis</h2>
+                <div class="analysis-card">
+                    <p>Enter a question to perform a custom analysis on the revised and old reports.</p>
+                    <div class="suggested-prompts">
+                        <button type="button" class="prompt-suggestion-btn" data-prompt="Was the borrower's name corrected in the revised report?">Borrower Name</button>
+                        <button type="button" class="prompt-suggestion-btn" data-prompt="Check if the 'Cost Approach' section was completed in the revised report.">Cost Approach</button>
+                        <button type="button" class="prompt-suggestion-btn" data-prompt="Verify that the 'Indicated Value by Sales Comparison Approach' was updated in the revised report.">Sales Grid Value</button>
+                        <button type="button" class="prompt-suggestion-btn" data-prompt="Please check below revision in Revised Report
+                        
+
+
+Any other updates">Report Rejection Reason Check</button>
+                    </div>
+                    <form action="{% url 'update_file_custom_analysis' %}" method="post" id="custom-analysis-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="filename1" value="{{ results.filename1 }}">
+                        <input type="hidden" name="filename2" value="{{ results.filename2 }}">
+                        {% if html_filename %}<input type="hidden" name="html_filename" value="{{ html_filename }}">{% endif %}
+                        {% if purchase_filename %}<input type="hidden" name="purchase_filename" value="{{ purchase_filename }}">{% endif %}
+                        {% if engagement_filename %}<input type="hidden" name="engagement_filename" value="{{ engagement_filename }}">{% endif %}
+                        
+                        <textarea name="custom_prompt" placeholder="e.g., 'Was the borrower name corrected in the revised report?'">{% if custom_prompt %}{{ custom_prompt }}{% endif %}</textarea>
+                        <button type="submit" class="btn-submit">Run Custom Analysis</button>
+                    </form>
+                </div>
+            </div>
+
+            <div style="flex: 1;">
+                <h2>Analysis Results</h2>
+                {% if custom_analysis_results %}
+                <div class="custom-analysis-results">
+                    {% if custom_analysis_results.error %}
+                        <div class="error-message">
+                            <p><strong>Custom Analysis Error:</strong> {{ custom_analysis_results.error }}</p>
+                        </div>
+                    {% else %}
+                        <div class="query-display">
+                            <p><strong>Your Query:</strong></p>
+                            <p><em>{{ custom_prompt }}</em></p>
+                        </div>
+
+                        <div class="custom-analysis-summary">
+                            <p><strong>Analysis Summary:</strong></p>
+                            <p>{{ custom_analysis_results.analysis_summary }}</p>
+                        </div>
+
+                        {% if custom_analysis_results.findings %}
+                            <h4 style="margin-top: 30px;">Findings:</h4>
+                            <table class="findings-table">
+                                <thead>
+                                    <tr>
+                                        <th>Finding</th>
+                                        <th>Detail</th>
+                                        <th>Source Location</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for finding in custom_analysis_results.findings %}
+                                    <tr><td>{{ finding.finding_title }}</td><td>{{ finding.finding_detail }}</td><td>{{ finding.source_location }}</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        {% else %}
+                            <p>No specific findings were extracted for this query.</p>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                {% else %}
+                    <div class="placeholder-text" style="border: 2px dashed #e5e7eb; border-radius: 8px; padding: 2rem; text-align: center; color: #6b7280;">
+                        <p>Your analysis results will appear here.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="diff-section">
+            <h2>Textual Differences</h2>
+            {% if results.differing_pages %}
+                <div class="alert alert-warning">
+                    <p>Text content differences were found on matching pages. Click to expand.</p>
+                </div>
+                {% for diff_item in results.differing_pages %}
+                    <div class="diff-details">
+                        <div class="diff-header">
+                            <span>Page {{ diff_item.page_number }}</span>
+                            <span class="arrow"></span>
+                        </div>
+                        <div class="diff-content">
+                            {{ diff_item.diff_html|safe }}
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-success">No textual differences found in the common pages.</div>
+            {% endif %}
+        </div>
     {% endif %}
-
-    <div style="text-align: center; margin-top: 3rem;">
-        <a href="{% url 'compare_pdfs_upload' %}" style="color: #007bff; text-decoration: none;">Compare other files</a>
-    </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
-document.querySelectorAll('.diff-header').forEach(header => {
-    header.addEventListener('click', () => {
-        const content = header.nextElementSibling;
-        const arrow = header.querySelector('.arrow');
-        content.style.display = content.style.display === 'block' ? 'none' : 'block';
-        arrow.classList.toggle('open');
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('custom-analysis-form');
+    if (form) {
+        form.addEventListener('submit', function() {
+            const overlay = document.getElementById('loader-overlay');
+            if(overlay) {
+                overlay.style.display = 'flex';
+            }
+        });
+    }
+
+    // Add functionality for prompt suggestion buttons
+    document.querySelectorAll('.prompt-suggestion-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const promptText = this.getAttribute('data-prompt');
+            const textarea = document.querySelector('#custom-analysis-form textarea[name="custom_prompt"]');
+            textarea.value = promptText;
+            textarea.focus();
+        });
+    });
+
+    // Add functionality for collapsible diff sections
+    document.querySelectorAll('.diff-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const content = header.nextElementSibling;
+            const arrow = header.querySelector('.arrow');
+            content.style.display = content.style.display === 'block' ? 'none' : 'block';
+            arrow.classList.toggle('open');
+        });
     });
 });
 </script>
 {% endblock %}
+                    

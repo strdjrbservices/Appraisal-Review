@@ -15,9 +15,7 @@
         <div class="file-info">
             <p><strong>Original Appraisal:</strong> {{ results.original_filename|default:"N/A" }}</p>
             <p><strong>1004D Form:</strong> {{ results.d1004_filename|default:"N/A" }}</p>
-            {% if has_html and results.html_filename and results.html_filename != 'N/A' %}
-            <p><strong>HTML Order Form:</strong> {{ results.html_filename }}</p>
-            {% endif %}
+            {% if results.html_filename %}<p><strong>Supporting Docs:</strong> {{ results.html_filename }}{% if results.purchase_filename %}, {{ results.purchase_filename }}{% endif %}</p>{% endif %}
         </div>
 
         <table class="d1004-result-table">
@@ -37,14 +35,8 @@
                 <h2>Custom Document Analysis</h2>
                 <div class="analysis-card">
                     <p>Enter a question or instruction below to perform a custom analysis on the uploaded documents.</p>
-                    <form action="{% url 'd1004_custom_analysis' %}" method="post" id="custom-analysis-form">
-                        {% csrf_token %}
-                        <input type="hidden" name="original_filename" value="{{ results.original_filename }}">
-                        <input type="hidden" name="d1004_filename" value="{{ results.d1004_filename }}">
-                        {% if has_html and results.html_filename and results.html_filename != 'N/A' %}
-                        <input type="hidden" name="html_filename" value="{{ results.html_filename }}">
-                        {% endif %}
-                        <textarea name="custom_prompt" placeholder="e.g., 'Are there any discrepancies in the borrower name across all documents?'">{% if custom_prompt %}{{ custom_prompt }}{% else %}Order Form (HTML) vs Appraisal Form (PDF)
+                    <div class="suggested-prompts">
+                        <button type="button" class="prompt-suggestion-btn" data-prompt="Oreder Form (HTML) vs 1004D Form (PDF)
 1. Verify Lender/Client Name and Address match between 1004D (Signature) and HTML.
 2. Verify Borrower Name and Address match between HTML and 1004D (Subject & Certification).
 3. Verify Appraiser Name matches between HTML and 1004D (Certification).
@@ -54,9 +46,21 @@
 2. Compare 'Contract Price' and 'Date of Contract' from 1004D to the OA report's contract section.
 3. Compare 'Effective Date' and 'Original Appraised Value' from 1004D to the OA report.
 4. Compare 'Original Appraiser' and 'Lender/Client' from 1004D to the OA report.
-5. Verify logic for "Summary Appraisal Update Report" section: If checked, "Market Value Declined" question must be answered. If 'Yes', a new value must be present.
-6. Verify logic for "Certification of Completion" section: If checked, "Improvements Completed" question must be answered. Inspection date in signature is mandatory.
-7. Confirm presence of 'Subject Street, front' photo, 'E&O and license', and 'Subject photo addendum' (if completion is certified) in the 1004D.{% endif %}</textarea>
+5. Verify logic for 'Summary Appraisal Update Report' section: If checked, 'Market Value Declined' question must be answered. If 'Yes', a new value must be present.
+6. Verify logic for 'Certification of Completion' section: If checked, 'Improvements Completed' question must be answered. Inspection date in signature is mandatory.
+7. Confirm presence of 'Subject Street, front' photo, 'E&O and license', and 'Subject photo addendum' (if completion is certified) in the 1004D.">Full Check</button>
+                        <button type="button" class="prompt-suggestion-btn" data-prompt="Compare the borrower name across all documents.">Borrower Name Check</button>
+                        <button type="button" class="prompt-suggestion-btn" data-prompt="Was the 'Certification of Completion' section filled out correctly?">Completion Check</button>
+                        <button type="button" class="prompt-suggestion-btn" data-prompt="Did the market value decline according to the 'Summary Appraisal Update Report' section?">Value Decline Check</button>
+                    </div>
+                    <form action="{% url 'd1004_custom_analysis' %}" method="post" id="custom-analysis-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="original_filename" value="{{ results.original_filename }}">
+                        <input type="hidden" name="d1004_filename" value="{{ results.d1004_filename }}">
+                        {% if results.html_filename %}<input type="hidden" name="html_filename" value="{{ results.html_filename }}">{% endif %}
+                        {% if results.purchase_filename %}<input type="hidden" name="purchase_filename" value="{{ results.purchase_filename }}">{% endif %}
+                        {% if results.engagement_filename %}<input type="hidden" name="engagement_filename" value="{{ results.engagement_filename }}">{% endif %}
+                        <textarea name="custom_prompt" placeholder="e.g., 'Are there any discrepancies in the borrower name across all documents?'">{% if custom_prompt %}{{ custom_prompt }}{% endif %}</textarea>
                         <button type="submit" class="btn-submit">Run Custom Analysis</button>
                     </form>
                 </div>
@@ -123,6 +127,16 @@ document.addEventListener('DOMContentLoaded', function() {
             if(overlay) {
                 overlay.style.display = 'flex';
             }
+        });
+
+        // Add functionality for prompt suggestion buttons
+        document.querySelectorAll('.prompt-suggestion-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const promptText = this.getAttribute('data-prompt');
+                const textarea = document.querySelector('#custom-analysis-form textarea[name="custom_prompt"]');
+                textarea.value = promptText;
+                textarea.focus();
+            });
         });
     }
 });

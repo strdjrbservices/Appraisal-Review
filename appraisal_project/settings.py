@@ -23,7 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-wasno3)&r*+rc&mynb3_b_o7q9wy+a67hcu=n%lcnpc@*7q7wx'
 
 # Google Generative AI API Key
-GOOGLE_API_KEY = ""
+GOOGLE_API_KEY = "AIzaSyAZnvdDp8Uwurmg07bhrbpkezM-JY8W-gM"
 
 
 # SECURITY WARNING: don't run with debug turned on in production!

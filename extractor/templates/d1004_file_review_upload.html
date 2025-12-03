@@ -1,4 +1,11 @@
 {% extends 'base.html' %}
+{% block extra_css %}
+<style>
+    .d1004-form .file-upload-container {
+        grid-template-columns: repeat(2, 1fr);
+    }
+</style>
+{% endblock %}
 
 {% block title %}1004D File Review{% endblock %}
 

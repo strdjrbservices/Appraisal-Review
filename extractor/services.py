@@ -1783,6 +1783,39 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
         }}
         """
 
+    elif section_name.lower() == 'revision_check':
+        prompt = f"""
+        You are an expert AI assistant specializing in real estate appraisal review.
+        You have been given a revised appraisal report and the original rejection reason.
+        Your task is to determine if the rejection reason has been addressed in the revised report.
+
+        **Original Rejection Reason:**
+        "{custom_prompt}"
+
+        **Your Task:**
+        1.  Carefully read the rejection reason to understand what needed to be fixed.
+        2.  Thoroughly analyze the provided revised appraisal report PDF to find where the correction was made.
+        3.  Provide a structured JSON response summarizing your findings.
+
+        **JSON Output Format:**
+        Your output must be a single, valid JSON object with the following keys:
+        - `"status"`: A string, either "Corrected", "Partially Corrected", or "Not Corrected".
+        - `"summary"`: A one-sentence summary of your conclusion.
+        - `"details"`: A detailed explanation of your findings. Describe what you looked for, what you found (or didn't find), and on which page or section the change is located.
+
+        **Example JSON Output:**
+        {{
+            "status": "Corrected",
+            "summary": "The borrower's name has been successfully corrected in the Subject section.",
+            "details": "The rejection reason stated that the borrower's name was misspelled. I have verified on page 1 in the 'Subject' section that the borrower's name has been updated from 'Jhon Doe' to 'John Doe', which resolves the issue."
+        }}
+        {{
+            "status": "Not Corrected",
+            "summary": "The missing cost approach was not added to the revised report.",
+            "details": "The rejection reason required the Cost Approach to be completed. I have scanned the entire revised document and confirmed that the Cost Approach section on page 3 remains blank. The revision has not been addressed."
+        }}
+        """
+
     elif section_name.lower() == 'reconciliation':
         prompt = f"""
         You are an expert at extracting information from the "Reconciliation" section of a real estate appraisal report.

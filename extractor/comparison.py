@@ -48,29 +48,31 @@ async def compare_pdfs(pdf1_path, pdf2_path, html_data=None, purchase_data=None,
             'market_value_2': market_value_2_task,
         }
 
-        # 1. Extract rejection reason from HTML if available
-        if html_data and 'html_content' in html_data:
-            # Use regex to find the rejection reason text
-            match = re.search(r"Report Rejection Reason(?:</strong>|</b>|:)\s*<br>\s*(.*?)\s*<", html_data.get('html_content', ''), re.IGNORECASE | re.DOTALL)
-            if match:
-                rejection_reason = match.group(1).strip()
-
-        # 2. If a reason was found, create a task to run the revision check on the new PDF
-        if rejection_reason:
+        # 1. If an HTML file was processed, extract rejection reason from its content
+        if html_data:
+            html_content = html_data.get('html_content', '')
+            if html_content:
+                # Use regex to find the rejection reason text
+                match = re.search(r"Report Rejection Reason(?:</strong>|</b>|:)\s*<br>\s*(.*?)\s*<", html_content, re.IGNORECASE | re.DOTALL)
+                if match:
+                    rejection_reason = match.group(1).strip()
+        
+        # 2. If a reason was found, create a task to run the revision check on the new (revised) PDF
+        if rejection_reason:    
             tasks['revision_check'] = extract_fields_from_pdf(
-                pdf_paths=[pdf1_path], # Check against the revised report
+                pdf_paths=[pdf1_path], # Check against the revised report (pdf1)
                 section_name='revision_check',
                 custom_prompt=rejection_reason
             )
-        
+            
         # Await all async tasks
         results = await asyncio.gather(*tasks.values())
         results_dict = dict(zip(tasks.keys(), results))
-
+    
         market_value_1 = results_dict.get('market_value_1')
         market_value_2 = results_dict.get('market_value_2')
         revision_check_results = results_dict.get('revision_check')
-        
+            
         with fitz.open(pdf1_path) as pdf1, fitz.open(pdf2_path) as pdf2:
             page_count_1 = len(pdf1)
             page_count_2 = len(pdf2)
@@ -85,10 +87,12 @@ async def compare_pdfs(pdf1_path, pdf2_path, html_data=None, purchase_data=None,
                         text1.splitlines(), text2.splitlines(),
                         fromdesc='PDF 1', todesc='PDF 2'
                     )
-                    differing_pages.append({'page_number': i + 1, 'diff_html': diff_html})            
+                    differing_pages.append({'page_number': i + 1, 'diff_html': diff_html})
             extra_pages_1 = list(range(min(page_count_1, page_count_2) + 1, page_count_1 + 1))
             extra_pages_2 = list(range(min(page_count_1, page_count_2) + 1, page_count_2 + 1))
             return {
+                'filename1': os.path.basename(pdf1_path),
+                'filename2': os.path.basename(pdf2_path),
                 'market_value_1': market_value_1,
                 'market_value_2': market_value_2,
                 'page_count_1': page_count_1,
@@ -244,10 +248,11 @@ async def compare_1004d(original_pdf_path, d1004_pdf_path, html_data=None, purch
     Performs a comprehensive review of a 1004D form against an original appraisal,
     an HTML order form, and a purchase contract.
     """
-    results = []
+    # This will hold the structured data for the template
+    comparison_data = {'checks': []} 
 
     def add_result(check, status, message):
-        results.append({"check": check, "status": status, "message": message})
+        comparison_data['checks'].append({"check": check, "status": status, "message": message})
 
     try:
         # --- 1. Data Extraction ---
@@ -279,6 +284,11 @@ async def compare_1004d(original_pdf_path, d1004_pdf_path, html_data=None, purch
             v1 = str(val1 or '').strip().lower()
             v2 = str(val2 or '').strip().lower()
             return v1 == v2
+        
+        def normalize_address(addr_str):
+            if not addr_str: return ""
+            # Remove commas, periods, and extra whitespace, then lowercase
+            return re.sub(r'[.,]', '', addr_str).strip().lower()
 
         # 2.1 Completeness Check
         missing_fields = [k for k, v in d1004.items() if v is None and "checkbox" not in k]
@@ -286,6 +296,20 @@ async def compare_1004d(original_pdf_path, d1004_pdf_path, html_data=None, purch
             add_result("1004D Completeness", "Passed", "All required fields appear to be filled.")
         else:
             add_result("1004D Completeness", "Failed", f"The following fields are missing in the 1004D: {', '.join(missing_fields)}")
+
+        # 2.1b Subject Info Match
+        oa_full_address = f"{oa_subject.get('Property Address', '')} {oa_subject.get('City', '')} {oa_subject.get('State', '')} {oa_subject.get('Zip Code', '')}"
+        d1004_full_address = f"{d1004.get('Property Address', '')} {d1004.get('City', '')} {d1004.get('State', '')} {d1004.get('Zip Code', '')}"
+        if safe_compare(normalize_address(oa_full_address), normalize_address(d1004_full_address)):
+             add_result("Property Address Match", "Passed", f"Addresses match: {d1004.get('Property Address')}")
+        else:
+            add_result("Property Address Match", "Failed", f"Mismatch: Original shows '{oa_subject.get('Property Address')}', 1004D shows '{d1004.get('Property Address')}'")
+
+        if safe_compare(d1004.get("Borrower"), oa_subject.get("Borrower")):
+            add_result("Borrower Name Match", "Passed", f"Borrower names match: {oa_subject.get('Borrower')}")
+        else:
+            add_result("Borrower Name Match", "Failed", f"Mismatch: 1004D shows '{d1004.get('Borrower')}', Original Appraisal shows '{oa_subject.get('Borrower')}'")
+
 
         # 2.2 Contract Info Match
         if safe_compare(d1004.get("Contract Price $"), oa_contract.get("Contract Price $")):
@@ -373,13 +397,16 @@ async def compare_1004d(original_pdf_path, d1004_pdf_path, html_data=None, purch
         else:
             add_result("Order Form Comparison", "Skipped", "HTML Order Form not provided; comparisons against it cannot be performed.")
 
-        # 2.8 Photo/Doc Requirements (Placeholder checks)
-        add_result("Photo Requirement", "Info", "Manual check required: Verify subject street, front, and rear photos are present.")
-        add_result("Document Requirement", "Info", "Manual check required: Verify E&O, License, and Photo Addendum are attached.")
-
-        return {
-            'html_filename': html_data.get('filename') if html_data else None,
-            'checks': results
+        # Add all extracted data to the results for re-rendering if needed
+        comparison_data['extracted_data'] = {
+            'oa_subject': oa_subject,
+            'oa_contract': oa_contract,
+            'oa_recon': oa_recon,
+            'oa_cert': oa_cert,
+            'd1004_data': d1004,
+            'html_data': html_data,
+            'purchase_data': purchase_data
         }
+        return comparison_data
     except Exception as e:
         return {'error': f"An unexpected error occurred during the 1004D review process: {str(e)}"}
