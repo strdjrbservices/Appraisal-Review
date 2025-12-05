@@ -9,9 +9,6 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('extract/<str:filename>/<str:section_name>/', views.extract_section, name='extract_section'),
-    path('compare/', views.compare_pdfs_upload_view, name='compare_pdfs_upload'),
-    path('compare/process/', views.compare_pdfs_process_view, name='compare_pdfs_process'),
-    path('compare/custom-analysis/', views.update_file_custom_analysis_view, name='update_file_custom_analysis'),
     path('compare-html-pdf/', views.compare_html_pdf_upload_view, name='compare_html_pdf_upload'),
     path('compare-html-pdf/process/', views.compare_html_pdf_process_view, name='compare_html_pdf_process'),
     path('generate-report/', views.generate_report, name='generate_report'),
@@ -20,6 +17,9 @@ urlpatterns = [
     path('1004d-review/', views.d1004_file_review_upload_view, name='d1004_file_review_upload'),
     path('1004d-review/process/', views.d1004_file_review_process_view, name='d1004_file_review_process'),
     path('1004d-review/custom-analysis/', views.d1004_custom_analysis_view, name='d1004_custom_analysis'),
+    path('review/update/', views.update_file_review_upload_view, name='update_file_review_upload'),
+    path('review/update/process/', views.update_file_review_process_view, name='update_file_review_process'),
+    path('review/update/custom-analysis/', views.update_file_review_custom_analysis_view, name='update_file_review_custom_analysis'),
     
     # API endpoint for fetching section data
     path('api/data/<str:filename>/<str:section_name>/', views.get_section_data_api, name='get_section_data_api'),

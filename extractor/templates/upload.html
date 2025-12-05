@@ -82,26 +82,20 @@
     font-family: Arial, sans-serif;
     ">
         <!-- ACTIVE TAB -->
-        <a href="{% url 'upload_pdf' %}" 
+        <a href="{% url 'upload_pdf' %}" target="_blank"
         style="text-decoration:none; color:#0d6efd; font-weight:700; font-size:15px; border-bottom:2px solid #0d6efd; padding-bottom:3px;">
         Full File Review
         </a> |
 
-        <a href="{% url 'compare_pdfs_upload' %}" target="_blank"
+        <a href="{% url 'update_file_review_upload' %}" target="_blank"
         style="text-decoration:none; color:#333; font-weight:600; font-size:15px;">
         Update File Review
         </a> |
-
-        <!-- <a href="{% url 'compare_html_pdf_upload' %}" target="_blank"
-        style="text-decoration:none; color:#333; font-weight:600; font-size:15px;">
-        Verify vs. Order Form
-        </a> | -->
 
         <!-- <a href="{% url 'escalation_check_upload' %}" target="_blank"
         style="text-decoration:none; color:#333; font-weight:600; font-size:15px;">
         Escalation Check
         </a> | -->
-
         <a href="{% url 'd1004_file_review_upload' %}" target="_blank"
         style="text-decoration:none; color:#333; font-weight:600; font-size:15px;">
         1004D File Review
@@ -160,6 +154,15 @@
         setupDragAndDrop('file-drop-zone-html', 'html_file', 'file-name-html');
         setupDragAndDrop('file-drop-zone-purchase', 'purchase_copy_file', 'file-name-purchase');
         setupDragAndDrop('file-drop-zone-engagement', 'engagement_letter_file', 'file-name-engagement');
+
+        // Show loader on form submission
+        const fullReviewForm = document.getElementById('upload-form-full');
+        if (fullReviewForm) {
+            fullReviewForm.addEventListener('submit', function() {
+                const overlay = document.getElementById('loader-overlay');
+                if (overlay) overlay.style.display = 'flex';
+            });
+        }
     });
 </script>
 {% endblock %}

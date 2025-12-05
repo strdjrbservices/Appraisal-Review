@@ -516,16 +516,20 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                                 <table class="findings-table">
                                     <thead>
                                         <tr>
-                                            <th>Finding</th>
+                                            <th>Status</th>
                                             <th>Detail</th>
+                                            <th>Finding</th>
                                             <th>Source Location</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {% for finding in data.findings %}
                                         <tr>
-                                            <td class="finding-title">{{ finding.finding_title }}</td>
+                                            <td>
+                                                <span class="status-{{ finding.status|lower }}">{{ finding.status|default:"Info" }}</span>
+                                            </td>
                                             <td>{{ finding.finding_detail }}</td>
+                                            <td class="finding-title">{{ finding.finding_title }}</td>
                                             <td class="finding-source">{{ finding.source_location }}</td>
                                         </tr>
                                         {% endfor %}

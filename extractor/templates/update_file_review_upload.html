@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}Update File Review{% endblock %}
+
+{% block content %}
+<div class="header-logout">
+    {% if user.is_authenticated %}
+        Welcome, {{ user.username }} | <a href="{% url 'logout' %}">Logout</a>
+    {% endif %}
+</div>
+
+<form id="upload-form" action="{% url 'update_file_review_process' %}" method="post" enctype="multipart/form-data">
+    <h2>Update File Review</h2>
+    <p style="margin-top:-1rem; margin-bottom: 2rem; color: #6b7280;">Upload a revised report and the original (old) report to compare key differences.</p>
+    {% csrf_token %}
+
+    <div class="file-upload-container" style="grid-template-columns: 1fr 1fr;">
+        <div id="file-drop-zone-revised" class="file-drop-zone required-zone">
+            <p class="drop-zone-text">Revised Report (Required)<br>Drag & Drop or <span class="browse-link">browse</span></p>
+            <span id="file-name-revised" class="file-name"></span>
+        </div>
+        <div id="file-drop-zone-old" class="file-drop-zone required-zone">
+            <p class="drop-zone-text">Old Report (Required)<br>Drag & Drop or <span class="browse-link">browse</span></p>
+            <span id="file-name-old" class="file-name"></span>
+        </div>
+        <div id="file-drop-zone-html" class="file-drop-zone optional-zone">
+            <p class="drop-zone-text">Order Form HTML (Optional)<br>Drag & Drop or <span class="browse-link">browse</span></p>
+            <span id="file-name-html" class="file-name"></span>
+        </div>
+        <div id="file-drop-zone-purchase" class="file-drop-zone optional-zone">
+            <p class="drop-zone-text">Purchase Copy (Optional)<br>Drag & Drop or <span class="browse-link">browse</span></p>
+            <span id="file-name-purchase" class="file-name"></span>
+        </div>
+    </div>
+
+    <input id="revised_report" type="file" name="revised_report" accept="application/pdf" required>
+    <input id="old_report" type="file" name="old_report" accept="application/pdf" required>
+    <input id="html_file" type="file" name="html_file" accept=".html,.htm">
+    <input id="purchase_copy_file" type="file" name="purchase_copy_file" accept="application/pdf">
+
+    <div class="button-container">
+        <button type="submit" class="btn" style="flex-grow: 1;">Run Review</button>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        function setupDragAndDrop(dropZoneId, fileInputId, fileNameId) { const dropZone = document.getElementById(dropZoneId); const fileInput = document.getElementById(fileInputId); const fileNameDisplay = document.getElementById(fileNameId); if (!dropZone || !fileInput || !fileNameDisplay) return; dropZone.addEventListener('click', () => fileInput.click()); dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); }); ['dragleave', 'dragend'].forEach(type => { dropZone.addEventListener(type, () => dropZone.classList.remove('dragover')); }); dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; fileNameDisplay.textContent = fileInput.files[0].name; } }); fileInput.addEventListener('change', () => { if (fileInput.files.length) { fileNameDisplay.textContent = fileInput.files[0].name; } }); }
+        setupDragAndDrop('file-drop-zone-revised', 'revised_report', 'file-name-revised');
+        setupDragAndDrop('file-drop-zone-old', 'old_report', 'file-name-old');
+        setupDragAndDrop('file-drop-zone-html', 'html_file', 'file-name-html');
+        setupDragAndDrop('file-drop-zone-purchase', 'purchase_copy_file', 'file-name-purchase');
+    });
+</script>
+{% endblock %}

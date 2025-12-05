@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% load dict_helpers %}
+
+{% block title %}1004D File Review Dashboard{% endblock %}
+{% block extra_css %}
+<body style="background-color: var(--primary-bg);">
+{% endblock %}
+
+{% block content %}
+<div class="home-container">
+    <div class="page-header">
+        <h1>1004D Review Dashboard</h1>
+        <div class="user-info">
+            {% if user.is_authenticated %}
+                <p class="username">Welcome, {{ user.username }}</p>
+                <a href="{% url 'logout' %}" class="logout-link">Logout</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="main-grid">
+        <div class="file-details-column">
+            <div class="card">
+                <h3>File Details</h3>
+                <div class="detail-item">
+                    <strong>Review Time:</strong>
+                    <span><span id="review-timer">00:00:00</span></span>
+                </div>
+                <p class="filename"><strong>Original Appraisal:</strong> {{ original_filename }}</p>
+                <p class="filename"><strong>1004D Form:</strong> {{ d1004_filename }}</p>
+                <hr style="border-color: var(--border-color); margin: 1rem 0;">
+                {% if base_info and not base_info.error %}
+                    <div class="detail-item">
+                        <strong>Main Form:</strong>
+                        <span>{{ base_info|get_item:"APPRAISAL FORM TYPE (1004/1025/1004D/1073)"|default:"-" }}</span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Add-ons:</strong>
+                        <span>{{ base_info|get_item:"Additional Form (1007/216/Rental/STR)"|default:"None" }}</span>
+                    </div>
+                {% endif %}
+            </div>
+
+            {% if html_data or purchase_data %}
+            <div class="card" style="animation-delay: 0.1s;">
+                <h3>Supporting Documents</h3>
+                {% if html_filename %}
+                    <p class="filename"><strong>Order Form:</strong> {{ html_filename }}</p>
+                {% endif %}
+                {% if purchase_filename %}
+                    <p class="filename"><strong>Purchase Contract:</strong> {{ purchase_filename }}</p>
+                {% endif %}
+                {% if html_data %}
+                    <div class="detail-item">
+                        <strong>Client (Order):</strong>
+                        <span>{{ html_data|get_item:"Client/Lender Name"|default:"-" }}</span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Borrower (Order):</strong>
+                        <span>{{ html_data|get_item:"Borrower (and Co-Borrower)"|default:"-" }}</span>
+                    </div>
+                {% endif %}
+                {% if purchase_data %}
+                    <div class="detail-item">
+                        <strong>Contract Price:</strong>
+                        <span>{{ purchase_data.contract|get_item:"Contract Price $"|default:"-" }}</span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Contract Date:</strong>
+                        <span>{{ purchase_data.contract|get_item:"Date of Contract"|default:"-" }}</span>
+                    </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="sections-column">
+            <h2>Select a section to review</h2>
+            <div class="section-grid">
+                <a href="{% url 'd1004_file_review_process' %}?original_filename={{ original_filename }}&d1004_filename={{ d1004_filename }}&html_filename={{ html_filename|default:'' }}&purchase_filename={{ purchase_filename|default:'' }}" class="section-button">
+                    Comparison Summary
+                </a>
+                {% for section_name, display_name in sections.items %}
+                    <a href="{% url 'extract_section' filename=original_filename section_name=section_name %}" class="section-button">
+                        {{ display_name }}
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="footer-actions">
+        <a href="{% url 'd1004_file_review_upload' %}" class="upload-another-link">← Upload different files</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.section-button').forEach(button => {
+    button.addEventListener('click', function() {
+        document.getElementById('loader-overlay').style.display = 'flex';
+    });
+});
+</script>
+{% endblock %}

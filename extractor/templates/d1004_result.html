@@ -59,7 +59,7 @@
                         <input type="hidden" name="d1004_filename" value="{{ results.d1004_filename }}">
                         {% if results.html_filename %}<input type="hidden" name="html_filename" value="{{ results.html_filename }}">{% endif %}
                         {% if results.purchase_filename %}<input type="hidden" name="purchase_filename" value="{{ results.purchase_filename }}">{% endif %}
-                        {% if results.engagement_filename %}<input type="hidden" name="engagement_filename" value="{{ results.engagement_filename }}">{% endif %}
+                        <input type="hidden" name="engagement_filename" value="{{ engagement_filename }}">
                         <textarea name="custom_prompt" placeholder="e.g., 'Are there any discrepancies in the borrower name across all documents?'">{% if custom_prompt %}{{ custom_prompt }}{% endif %}</textarea>
                         <button type="submit" class="btn-submit">Run Custom Analysis</button>
                     </form>
@@ -90,14 +90,20 @@
                             <table class="findings-table">
                                 <thead>
                                     <tr>
-                                        <th>Finding</th>
+                                        <th>Status</th>
                                         <th>Detail</th>
+                                        <th>Finding</th>
                                         <th>Source Location</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for finding in custom_analysis_results.findings %}
-                                    <tr><td>{{ finding.finding_title }}</td><td>{{ finding.finding_detail }}</td><td>{{ finding.source_location }}</td></tr>
+                                    <tr>
+                                        <td><span class="status-{{ finding.status|lower }}">{{ finding.status }}</span></td>
+                                        <td>{{ finding.finding_detail }}</td>
+                                        <td>{{ finding.finding_title }}</td>
+                                        <td>{{ finding.source_location }}</td>
+                                    </tr>
                                     {% endfor %}
                                 </tbody>
                             </table>

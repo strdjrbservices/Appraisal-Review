@@ -536,6 +536,16 @@ CUSTOM_ANALYSIS_FIELDS = [
     "User-defined query" # This is a placeholder
 ]
 # A dictionary to map section names to their corresponding field lists
+
+# FHA CHECK
+FHA_CHECK_FIELDS = [
+    "FHA case number on all pages",
+    "FHA intended user comment",
+    "4000.1 handbook guidelines comment",
+    "Attic/crawl space inspection comment",
+    "Well and septic distance guidelines comment",
+]
+
 FIELD_SECTIONS = {
     "base_info": BASE_FIELD,
     "subject": SUBJECT_FIELDS,
@@ -561,7 +571,20 @@ FIELD_SECTIONS = {
     "escalation_check": ESCALATION_CHECK_FIELDS,
     "d1004": D1004_FIELDS,
     "custom_analysis": CUSTOM_ANALYSIS_FIELDS,
+    "fha_check": FHA_CHECK_FIELDS,
 }
+
+# Create a combined set of fields for efficient extraction in the comparison view
+COMBINED_COMPARISON_FIELDS = {
+    "subject": SUBJECT_FIELDS,
+    "certification": CERTIFICATION_FIELDS,
+    "base_info": BASE_FIELD,
+    "reconciliation": RECONCILIATION_FIELDS,
+    "improvements": IMPROVEMENTS_FIELDS,
+    "fha_check": FHA_CHECK_FIELDS,
+    "sales_grid": SALES_COMPARISON_APPROACH_FIELDS,
+}
+FIELD_SECTIONS["combined_comparison"] = COMBINED_COMPARISON_FIELDS
 
 logger = logging.getLogger(__name__)
 
@@ -577,7 +600,7 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
     # Get the correct field list based on the section name
     fields_to_extract = FIELD_SECTIONS.get(section_name.lower(), [])
     # Allow sections with complex prompts even if their field list is a placeholder or used differently
-    if not fields_to_extract and section_name.lower() not in ['sales_grid', 'sale_history', 'improvements', 'custom_analysis', 'client_lender_requirements', 'report_details']:
+    if not fields_to_extract and section_name.lower() not in ['sale_history', 'custom_analysis', 'client_lender_requirements', 'report_details', 'combined_comparison']:
         return {"error": f"Invalid section name provided: {section_name}"}
 
     prompt = ""
@@ -692,11 +715,13 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
         2.  **Use Null for Missing Data:** If a field is not found, is not applicable, or has no value (e.g., '--', 'N/A', or blank), use `null` as its value. Do not invent data.
         3.  **Handle Complex Fields:**
             *   For fields like "Appliances", list all items that are checked or mentioned (e.g., "Refrigerator, Range/Oven, Dishwasher").
+            *   **Checkboxes**: For any field where the user selects from multiple options via checkboxes (e.g., "Type", "Existing/Proposed/Under Const.", "Car Storage"), extract all selected options as a comma-separated string.
             *   For fields with "(Material/Condition)", capture both aspects if available (e.g., "Brick/Good").
             *   For "Fuel", capture all listed types, especially combinations like "Gas/Electric".
             *   For yes/no questions, extract the "Yes" or "No" answer. The subsequent "If Yes, describe" or "If No, describe" fields should contain the corresponding explanation.
             *   For field like "Basement Finish", value 0 or more than 0 %
             *   **Distinguish "Units" from "Type":** The "Units" field should be the numerical count of total units (e.g., "1", "2"). The "Type" field describes the property configuration. If the "Type" is "One with Accessory Unit", the "Units" field should still be "1", as an ADU does not make it a 2-unit property in this context.
+            *   **Garage Type**: For the "Garage (Att./Det./Built-in)" field, if multiple checkboxes are marked (e.g., both "Attached" and "Built-in"), extract all selected words as a comma-separated string (e.g., "Attached, Built-in").
             *   **Accessory Unit (ADU):** The field "One with Accessory Unit (ADU)" is a checkbox. If it is checked, extract "Yes". If it is not checked, extract "No". This is separate from the "Type" field.
             *   **Car Storage Logic:**
                 *   If "None" is selected for "Car Storage", all other car storage fields ('Driveway # of Cars', 'Garage # of Cars', 'Carport # of Cars', etc.) must be `null`.
@@ -1082,23 +1107,38 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
         1.  `"query_summary"`: A brief, one-sentence summary of the user's original query.
         2.  `"findings"`: A JSON array of objects. Each object should represent a specific data point or piece of evidence found in the document that relates to the query. Each object in the array should have these keys:
             *   `"finding_title"`: A short, descriptive title for the finding (e.g., "GLA in Improvements Section", "Comparable 1 Address").
+            *   `"status"`: A string indicating the status of the finding. Use "Pass" if the data is consistent or correct, "Fail" if there is a discrepancy or error, and "Info" for neutral data points.
             *   `"finding_detail"`: The specific data or text extracted from the document (e.g., "1,850 sq. ft.", "123 Oak St").
             *   `"source_location"`: The section, page number, or document name where this information was found (e.g., "Improvements Section, Page 3", "Sales Grid in original_appraisal.pdf").
         3.  `"analysis_summary"`: A concise summary that synthesizes the findings and directly answers the user's query. State whether the issue is "Corrected", "Not Corrected", "Addressed", or "Not Addressed". If corrected or addressed, reference the addendum page or section where the change is present. Highlight any deviations or disagreements you have with the provided information.
 
-        **Example for query "Check GLA consistency":**
+        **Example for query "Check GLA consistency and borrower name":**
         {{
             "query_summary": "Checking for discrepancies in Gross Living Area (GLA) across the report.",
             "findings": [
                 {{
                     "finding_title": "GLA in Improvements Section",
+                    "status": "Pass",
                     "finding_detail": "1,850 sq. ft.",
                     "source_location": "Improvements, Page 2"
                 }},
                 {{
                     "finding_title": "GLA in Sales Grid (Subject)",
+                    "status": "Pass",
                     "finding_detail": "1,850 sq. ft.",
                     "source_location": "Sales Comparison Approach"
+                }},
+                {{
+                    "finding_title": "Borrower Name in Report",
+                    "status": "Fail",
+                    "finding_detail": "John Doe",
+                    "source_location": "Subject Section, Page 1"
+                }},
+                {{
+                    "finding_title": "Borrower Name in Order Form",
+                    "status": "Fail",
+                    "finding_detail": "Jon Smith",
+                    "source_location": "Order Form HTML"
                 }}
             ],
             "analysis_summary": "The Gross Living Area (GLA) is consistently reported as 1,850 sq. ft. in both the Improvements section and the Sales Comparison Approach grid. No discrepancies were found."

@@ -6,10 +6,10 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib import messages
-from .forms import SignUpForm
+from .forms import SignUpForm, UpdateFileReviewForm
+from .utils import _extract_from_html_file
 from asgiref.sync import sync_to_async
-from bs4 import BeautifulSoup
-from .comparison import compare_pdfs, compare_data_sets, compare_1004d
+from .comparison import compare_data_sets, compare_1004d, compare_revised_vs_old
 from django.views.decorators.csrf import csrf_exempt
 import fitz  # PyMuPDF
 from django.http import JsonResponse
@@ -126,114 +126,100 @@ async def upload_pdf(request):
     return await sync_to_async(render)(request, 'upload.html')
 
 @login_required
-def compare_pdfs_upload_view(request):
-    """Handles the GET request to display the compare upload form."""
-    return render(request, 'compare_upload.html')
+async def update_file_review_upload_view(request):
+    """Handles the GET request to display the update file review upload form."""
+    form = UpdateFileReviewForm()
+    return await sync_to_async(render)(request, 'update_file_review_upload.html', {'form': form})
 
 @login_required
-async def compare_pdfs_process_view(request):
-    """Handles the POST request to process and compare two PDFs."""
-    if request.method == 'POST' and request.FILES.get('pdf_file1') and request.FILES.get('pdf_file2'):
-        pdf_file1 = request.FILES['pdf_file1']
-        pdf_file2 = request.FILES['pdf_file2']
-        html_file = request.FILES.get('html_file')
-        purchase_copy_file = request.FILES.get('purchase_copy_file')
-        engagement_letter_file = request.FILES.get('engagement_letter_file')
-        fs = FileSystemStorage()
+async def update_file_review_process_view(request):
+    """
+    Handles the POST request from the upload form to prepare the dashboard,
+    and the GET request from the dashboard to run the comparison.
+    """
+    fs = FileSystemStorage()
 
-        filename1 = await sync_to_async(fs.save)(pdf_file1.name, pdf_file1)
-        filename2 = await sync_to_async(fs.save)(pdf_file2.name, pdf_file2)
-        pdf1_path = await sync_to_async(fs.path)(filename1)
-        pdf2_path = await sync_to_async(fs.path)(filename2)
+    # Handle GET request from the dashboard to run the comparison
+    if request.method == 'GET' and request.GET.get('revised_filename'):
+        revised_filename = request.GET.get('revised_filename')
+        old_filename = request.GET.get('old_filename')
 
-        # --- Process Optional Files ---
-        html_data = None
-        purchase_data = None
-        engagement_data = None
+        revised_path = await sync_to_async(fs.path)(revised_filename)
+        old_path = await sync_to_async(fs.path)(old_filename)
 
-        if html_file:
-            html_filename = await sync_to_async(fs.save)(html_file.name, html_file)
-            html_path = await sync_to_async(fs.path)(html_filename)
-            html_data = await sync_to_async(_extract_from_html_file)(html_path)
-
-        if purchase_copy_file:
-            purchase_filename = await sync_to_async(fs.save)(purchase_copy_file.name, purchase_copy_file)
-            purchase_path = await sync_to_async(fs.path)(purchase_filename)
-            purchase_data = await extract_fields_from_pdf(purchase_path, 'contract')
-
-        if engagement_letter_file:
-            engagement_filename = await sync_to_async(fs.save)(engagement_letter_file.name, engagement_letter_file)
-            engagement_path = await sync_to_async(fs.path)(engagement_filename)
-            extracted_engagement_data = await extract_fields_from_pdf(engagement_path, 'report_details', custom_prompt="Extract the 'Appraisal Fee' or 'Total Fee' from this document.")
-            if 'error' not in extracted_engagement_data:
-                engagement_data = {'addendum': extracted_engagement_data}
-        # --- End of Optional File Processing ---
-
-        comparison_results = await compare_pdfs(pdf1_path, pdf2_path, html_data, purchase_data, engagement_data)
+        # This part is now simplified as optional files are not passed from the dashboard GET request.
+        # If they are needed for the summary, the logic would need to be adjusted to pass their filenames too.
+        comparison_results = await compare_revised_vs_old(revised_path, old_path, {})
 
         context = {
-            'filename1': filename1,
-            'filename2': filename2,
             'results': comparison_results,
-            'html_filename': html_file.name if html_file else None,
-            'purchase_filename': purchase_copy_file.name if purchase_copy_file else None,
-            'engagement_filename': engagement_letter_file.name if engagement_letter_file else None,
+            'revised_filename': revised_filename,
+            'old_filename': old_filename
         }
-        return await sync_to_async(render)(request, 'compare_results.html', context)
-    # Redirect to the upload page if it's not a POST request
-    return await sync_to_async(redirect)('compare_pdfs_upload')
+        return await sync_to_async(render)(request, 'update_file_review_results.html', context)
 
-@login_required
-async def update_file_custom_analysis_view(request):
-    """
-    Handles custom analysis prompts for the Update File Review, using context from all uploaded files.
-    """
+    # Handle POST request from the initial upload form
     if request.method == 'POST':
-        fs = FileSystemStorage()
-        filename1 = request.POST.get('filename1')
-        filename2 = request.POST.get('filename2')
-        html_filename = request.POST.get('html_filename')
-        purchase_filename = request.POST.get('purchase_filename')
-        engagement_filename = request.POST.get('engagement_filename')
-        custom_prompt = request.POST.get('custom_prompt')
+        form = UpdateFileReviewForm(request.POST, request.FILES)
+        if await sync_to_async(form.is_valid)():
+            revised_report_file = form.cleaned_data['revised_report']
+            old_report_file = form.cleaned_data['old_report']
 
-        if not all([filename1, filename2, custom_prompt]):
-            messages.error(request, "Missing required file information for custom analysis.")
-            return await sync_to_async(redirect)('compare_pdfs_upload')
+            revised_filename = await sync_to_async(fs.save)(revised_report_file.name, revised_report_file)
+            old_filename = await sync_to_async(fs.save)(old_report_file.name, old_report_file)
+            revised_path = await sync_to_async(fs.path)(revised_filename)
 
-        # --- Build list of file paths for analysis ---
-        paths_for_analysis = []
-        pdf1_path = await sync_to_async(fs.path)(filename1)
-        pdf2_path = await sync_to_async(fs.path)(filename2)
-        paths_for_analysis.extend([pdf1_path, pdf2_path])
+            # Process optional files and extract their data for the dashboard
+            optional_files = {}
+            html_data, purchase_data, engagement_data = None, None, None
 
-        # --- Re-run initial comparison to get context ---
-        # This ensures the page is fully populated with the original comparison data
-        comparison_results = await compare_pdfs(pdf1_path, pdf2_path)
+            for field_name in ['order_form', 'purchase_copy', 'engagement_letter']:
+                file = form.cleaned_data.get(field_name)
+                if file:
+                    filename = await sync_to_async(fs.save)(file.name, file)
+                    path = await sync_to_async(fs.path)(filename)
+                    optional_files[field_name] = {'path': path, 'name': filename}
 
-        # --- Call AI for custom analysis ---
-        custom_analysis_results = await extract_fields_from_pdf(
-            pdf_paths=paths_for_analysis,
-            section_name='custom_analysis',
-            custom_prompt=(
-                f"User Query: '''{custom_prompt}'''\n\n"
-                "Analyze all provided documents (a revised appraisal report and an old one) to answer the user's query. "
-                "The first file is the revised report, and the second is the old one."
-            )
-        )
+                    if field_name == 'order_form':
+                        html_data = await sync_to_async(_extract_from_html_file)(path)
+                    elif field_name == 'purchase_copy':
+                        purchase_data = await extract_fields_from_pdf(path, 'contract')
+                    elif field_name == 'engagement_letter':
+                        extracted_engagement_data = await extract_fields_from_pdf(path, 'report_details', custom_prompt="Extract the 'Appraisal Fee' or 'Total Fee' from this document.")
+                        if 'error' not in extracted_engagement_data:
+                            engagement_data = {'addendum': extracted_engagement_data}
 
-        # --- Render results page with new analysis data ---
-        context = {
-            'results': comparison_results,
-            'custom_analysis_results': custom_analysis_results,
-            'custom_prompt': custom_prompt,
-            'html_filename': html_filename,
-            'purchase_filename': purchase_filename,
-            'engagement_filename': engagement_filename,
-        }
-        return await sync_to_async(render)(request, 'compare_results.html', context)
+            # Extract base info from the revised report for the dashboard display
+            base_info = await extract_fields_from_pdf(revised_path, 'base_info')
 
-    return await sync_to_async(redirect)('compare_pdfs_upload')
+            # Create display names for the section buttons
+            sections_for_template = {
+                key: key.replace('_', ' ').title()
+                for key in FIELD_SECTIONS.keys() if key not in ['uniform_report', 'addendum', 'appraisal_id', 'additional_comments', 'base_info', 'd1004']
+            }
+
+            context = {
+                'revised_filename': revised_filename,
+                'old_filename': old_filename,
+                'base_info': base_info,
+                'sections': sections_for_template,
+                'optional_files': optional_files,
+                'html_data': html_data,
+                'purchase_data': purchase_data,
+                'engagement_data': engagement_data,
+            }
+            return await sync_to_async(render)(request, 'update_file_review_dashboard.html', context)
+
+            # Import here to avoid circular dependency
+            comparison_results = await compare_revised_vs_old(revised_path, old_path, optional_files)
+
+            context = {
+                'results': comparison_results,
+                'revised_filename': revised_filename,
+                'old_filename': old_filename
+            }
+            return await sync_to_async(render)(request, 'update_file_review_results.html', context)
+    return await sync_to_async(redirect)('update_file_review_upload')
 
 @login_required
 def d1004_file_review_upload_view(request):
@@ -242,8 +228,14 @@ def d1004_file_review_upload_view(request):
 
 @login_required
 async def d1004_file_review_process_view(request):
-    """Handles the POST request to process and compare an original appraisal with a 1004D."""
-    if request.method == 'POST' and request.FILES.get('original_pdf') and request.FILES.get('d1004_pdf'):
+    """
+    Handles the POST from upload to show the dashboard, and the GET from the dashboard
+    to process and compare an original appraisal with a 1004D.
+    """
+    fs = FileSystemStorage()
+
+    # Handle POST request from the initial upload form
+    if request.method == 'POST':
         original_pdf = request.FILES['original_pdf']
         d1004_pdf = request.FILES['d1004_pdf']
         html_file = request.FILES.get('html_file')
@@ -273,18 +265,64 @@ async def d1004_file_review_process_view(request):
             purchase_path = await sync_to_async(fs.path)(purchase_filename)
             purchase_data = await extract_fields_from_pdf(purchase_path, 'contract')
 
+        # Extract base info from the original report for the dashboard display
+        base_info = await extract_fields_from_pdf(original_pdf_path, 'base_info')
+
+        # Create display names for the section buttons (for the original report)
+        sections_for_template = {
+            key: key.replace('_', ' ').title()
+            for key in FIELD_SECTIONS.keys() if key not in ['uniform_report', 'addendum', 'appraisal_id', 'additional_comments', 'base_info', 'd1004']
+        }
+
+        context = {
+            'original_filename': original_filename,
+            'd1004_filename': d1004_filename,
+            'html_filename': html_filename_for_context,
+            'purchase_filename': purchase_filename_for_context,
+            'base_info': base_info,
+            'sections': sections_for_template,
+            'html_data': html_data,
+            'purchase_data': purchase_data,
+        }
+        return await sync_to_async(render)(request, 'd1004_file_review_dashboard.html', context)
+
+    # Handle GET request from the dashboard to run the comparison
+    if request.method == 'GET' and request.GET.get('original_filename'):
+        original_filename = request.GET.get('original_filename')
+        d1004_filename = request.GET.get('d1004_filename')
+        html_filename = request.GET.get('html_filename')
+        purchase_filename = request.GET.get('purchase_filename')
+        # Initialize context filenames for the results page
+        html_filename_for_context = html_filename
+        purchase_filename_for_context = purchase_filename
+
+        original_pdf_path = await sync_to_async(fs.path)(original_filename)
+        d1004_pdf_path = await sync_to_async(fs.path)(d1004_filename)
+
+        html_data = None
+        if html_filename and await sync_to_async(fs.exists)(html_filename):
+            html_path = await sync_to_async(fs.path)(html_filename)
+            html_data = await sync_to_async(_extract_from_html_file)(html_path)
+
+        purchase_data = None
+        if purchase_filename and await sync_to_async(fs.exists)(purchase_filename):
+            purchase_path = await sync_to_async(fs.path)(purchase_filename)
+            purchase_data = await extract_fields_from_pdf(purchase_path, 'contract')
+
+        # Perform the comparison
         comparison_results = await compare_1004d(original_pdf_path, d1004_pdf_path, html_data, purchase_data)
 
         # Add filenames to the results dictionary so they can be accessed in the template for the custom analysis form.
         comparison_results['original_filename'] = original_filename
         comparison_results['d1004_filename'] = d1004_filename
-        comparison_results['html_filename'] = html_filename_for_context
-        comparison_results['purchase_filename'] = purchase_filename_for_context
+        comparison_results['html_filename'] = html_filename_for_context if html_filename_for_context else ""
+        comparison_results['purchase_filename'] = purchase_filename_for_context if purchase_filename_for_context else ""
 
         context = {
             'results': comparison_results,
         }
         return await sync_to_async(render)(request, 'd1004_result.html', context)
+
     return await sync_to_async(redirect)('d1004_file_review_upload')
 
 @login_required
@@ -356,54 +394,88 @@ async def d1004_custom_analysis_view(request):
     # Redirect if not a POST request
     return await sync_to_async(redirect)('d1004_file_review_upload')
 
+@login_required
+async def update_file_review_custom_analysis_view(request):
+    """
+    Handles custom analysis prompts for the update file review, using context from all uploaded files.
+    """
+    if request.method == 'POST':
+        fs = FileSystemStorage()
+        revised_filename = request.POST.get('revised_filename')
+        old_filename = request.POST.get('old_filename')
+        order_form_filename = request.POST.get('order_form_filename')
+        purchase_copy_filename = request.POST.get('purchase_copy_filename')
+        engagement_letter_filename = request.POST.get('engagement_letter_filename')
+        custom_prompt = request.POST.get('custom_prompt')
 
-def _extract_from_html_file(file_path):
-    """Extracts data from the HTML file using BeautifulSoup."""
-    data = {}
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            html_content = f.read()
+        if not revised_filename or not old_filename or not custom_prompt:
+            messages.error(request, "Missing required files or custom prompt for analysis.")
+            return await sync_to_async(redirect)('update_file_review_upload')
 
-        soup = BeautifulSoup(html_content, 'html.parser')
+        pdf_paths_for_analysis = []
+        all_files_context_for_prompt = {}
+        optional_files_data = {}
 
-        def get_text_from_label(label_text, default="N/A"): 
-            """Finds a label by its text and returns the text of the associated info span."""
-            label_element = soup.find(lambda tag: tag.name == 'label' and label_text.lower() in tag.get_text().lower())
-            if label_element:
-                # Find the parent container and then the value span within it
-                parent_div = label_element.find_parent(class_='col-8')
-                if parent_div and parent_div.find_next_sibling(class_='col-16'):
-                    value_span = parent_div.find_next_sibling(class_='col-16').find('span', class_='view-label-info')
-                    if value_span:
-                        return value_span.get_text(strip=True)
-            return default
+        # Add required PDF files
+        revised_path = await sync_to_async(fs.path)(revised_filename)
+        old_path = await sync_to_async(fs.path)(old_filename)
+        pdf_paths_for_analysis.extend([revised_path, old_path])
 
-        data['Client/Lender Name'] = get_text_from_label('Client Name')
-        data['Lender Address'] = get_text_from_label('Lender Address')
-        data['FHA Case Number'] = get_text_from_label('FHA Case Number')
-        data['Transaction Type'] = get_text_from_label('Transaction Type')
-        data['AMC Reg. Number'] = get_text_from_label('AMC Reg. Number')
-        data['Borrower (and Co-Borrower)'] = get_text_from_label('Borrower Name')
-        data['Property Type'] = get_text_from_label('Property Type')
-        data['Property Address'] = get_text_from_label('Property Address')
-        data['Property County'] = get_text_from_label('Property County')
-        data['Appraisal Type'] = get_text_from_label('Appraisal Type')
-        data['Assigned to Vendor(s)'] = get_text_from_label('Assigned to Vendor(s)')
+        # Add optional files and extract data for context
+        if order_form_filename and await sync_to_async(fs.exists)(order_form_filename):
+            order_form_path = await sync_to_async(fs.path)(order_form_filename)
+            html_data = await sync_to_async(_extract_from_html_file)(order_form_path)
+            all_files_context_for_prompt['order_form_data'] = html_data
+            optional_files_data['order_form'] = {'path': order_form_path, 'name': order_form_filename}
+            pdf_paths_for_analysis.append(order_form_path) # Add HTML file path for AI to read
 
-        uad_xml_link = soup.find(id='ctl00_cphBody_lnkAppraisalXMLFile')
-        data['UAD XML Report'] = uad_xml_link.get_text(strip=True) if uad_xml_link else "N/A"
+        if purchase_copy_filename and await sync_to_async(fs.exists)(purchase_copy_filename):
+            purchase_path = await sync_to_async(fs.path)(purchase_copy_filename)
+            purchase_data = await extract_fields_from_pdf(purchase_path, 'contract')
+            all_files_context_for_prompt['purchase_contract_data'] = purchase_data
+            optional_files_data['purchase_copy'] = {'path': purchase_path, 'name': purchase_copy_filename}
+            pdf_paths_for_analysis.append(purchase_path)
 
-    except FileNotFoundError:
-        for field in fields:
-            data[field] = "N/A (HTML File Error)"
-    except Exception as e:
-        fields = ['Client/Lender Name', 'Lender Address', 'FHA Case Number',
-              'Transaction Type', 'AMC Reg. Number', 'Borrower (and Co-Borrower)',
-              'Property Type', 'Property Address', 'Property County',
-              'Appraisal Type', 'Assigned to Vendor(s)', 'UAD XML Report']
-        for field in fields:
-             data[field] = "N/A (HTML Processing Error)"
-    return data
+        if engagement_letter_filename and await sync_to_async(fs.exists)(engagement_letter_filename):
+            engagement_path = await sync_to_async(fs.path)(engagement_letter_filename)
+            extracted_engagement_data = await extract_fields_from_pdf(engagement_path, 'report_details', custom_prompt="Extract the 'Appraisal Fee' or 'Total Fee' from this document.")
+            if 'error' not in extracted_engagement_data:
+                all_files_context_for_prompt['engagement_letter_data'] = extracted_engagement_data
+            optional_files_data['engagement_letter'] = {'path': engagement_path, 'name': engagement_letter_filename}
+            pdf_paths_for_analysis.append(engagement_path)
+
+        # Re-run the initial comparison to get the base results to display on the page
+        initial_comparison_results = await compare_revised_vs_old(revised_path, old_path, optional_files_data)
+
+        # Call the AI for custom analysis, passing all available documents.
+        full_custom_prompt = (
+            f"User Query: '''{custom_prompt}'''\n\n"
+            "Analyze all provided documents (revised appraisal, old appraisal, and any optional files like HTML order form, purchase contract, engagement letter if present) to answer the user's query. "
+            "Use the following pre-processed JSON data as the primary source for your analysis and to cross-reference information. "
+            f"Context Data: {json.dumps(all_files_context_for_prompt)}"
+        )
+
+        custom_analysis_results = await extract_fields_from_pdf(
+            pdf_paths=pdf_paths_for_analysis,
+            section_name='custom_analysis',
+            custom_prompt=full_custom_prompt
+        )
+
+        context = {
+            'results': initial_comparison_results,
+            'custom_analysis_results': custom_analysis_results,
+            'custom_prompt': custom_prompt,
+            'revised_filename': revised_filename,
+            'old_filename': old_filename,
+            'order_form_filename': order_form_filename,
+            'purchase_copy_filename': purchase_copy_filename,
+            'engagement_letter_filename': engagement_letter_filename,
+            'html_data': all_files_context_for_prompt.get('order_form_data') # Pass extracted HTML data if available
+        }
+        return await sync_to_async(render)(request, 'update_file_review_results.html', context)
+
+    messages.error(request, "Invalid request for custom analysis.")
+    return await sync_to_async(redirect)('update_file_review_upload')
 
 async def _extract_from_pdf_file(file_path):
     """Extracts data from the PDF file using the Gemini API service."""

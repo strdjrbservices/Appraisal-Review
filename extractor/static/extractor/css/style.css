@@ -497,6 +497,52 @@ input[type="file"] {
     border-top: 1px solid #e5e7eb;
     overflow-x: auto;
 }
+
+.results-card {
+    background-color: var(--card-bg);
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+    margin-bottom: 1.5rem;
+    overflow: hidden; /* Ensures child elements conform to border radius */
+}
+.results-header {
+    background-color: #f9fafb;
+    padding: 1rem 1.5rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+.results-header:hover {
+    background-color: #f3f4f6;
+}
+.results-header h3, .results-header h4 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: var(--text-primary);
+}
+.toggle-results-btn {
+    background-color: transparent;
+    border: 1px solid #d1d5db;
+    color: #4b5563;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+.toggle-results-btn:hover {
+    background-color: #e5e7eb;
+}
+.results-content {
+    display: none; /* Hidden by default */
+    padding: 1.5rem;
+    background-color: #fff;
+    border-top: 1px solid #e5e7eb;
+    overflow-x: auto;
+}
 /* Styles for the difflib table */
 table.diff {
     border-collapse: collapse;
@@ -613,6 +659,21 @@ table.diff {
 .status-Info {
     color: #0284c7;
     font-weight: 600;
+}
+.d1004-result-table .status-failed-row {
+    background-color: #fef2f2;
+}
+.d1004-result-table .status-info-row {
+    background-color: #eff6ff;
+}
+.filter-btn-group {
+    margin-bottom: 1rem;
+    display: flex;
+    gap: 0.5rem;
+}
+.filter-btn {
+    padding: 6px 12px;
+    border: 1px solid var(--border-color);
 }
 .error-message {
     background-color: #fef2f2;

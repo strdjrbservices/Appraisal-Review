@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+
+{% load dict_helpers %} {# Assuming dict_helpers is available for accessing dictionary items in templates #}
+
+{% block title %}Update File Review Results{% endblock %}
+
+{% block content %}
+<div class="results-container">
+    <h1>Update File Review Results</h1>
+
+    {% if results.error %}
+        <div class="error-message">
+            <p><strong>Error:</strong> {{ results.error }}</p>
+        </div>
+    {% else %}
+        <div class="file-info">
+            <p><strong>Revised Report:</strong> {{ revised_filename|default:"N/A" }}</p>
+            <p><strong>Old Report:</strong> {{ old_filename|default:"N/A" }}</p>
+            {% if results.optional_files.order_form.name %}<p><strong>Order Form:</strong> {{ results.optional_files.order_form.name }}</p>{% endif %}
+            {% if results.optional_files.purchase_copy.name %}<p><strong>Purchase Copy:</strong> {{ results.optional_files.purchase_copy.name }}</p>{% endif %}
+            {% if results.optional_files.engagement_letter.name %}<p><strong>Engagement Letter:</strong> {{ results.optional_files.engagement_letter.name }}</p>{% endif %}
+        </div>
+
+        <h2>Comparison Summary</h2>
+        <table class="comparison-table">
+            <thead>
+                <tr>
+                    <th>Check</th>
+                    <th>Status</th>
+                    <th>Message</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in results.checks %}
+                <tr>
+                    <td><strong>{{ item.check }}</strong></td>
+                    <td><span class="status-{{ item.status|lower }}">{{ item.status }}</span></td>
+                    <td>{{ item.message }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="custom-analysis-section" style="display: flex; gap: 2rem; margin-top: 2rem;">
+            <div style="flex: 1;">
+                <h2>Custom Document Analysis</h2>
+                <div class="analysis-card">
+                    <p>Enter a question or instruction below to perform a custom analysis on the uploaded documents.</p>
+                    <div class="suggested-prompts">
+                        <button type="button" class="prompt-suggestion-btn" data-prompt="Compare the borrower name across all documents.">Borrower Name Check</button>
+                        <button type="button" class="prompt-suggestion-btn" data-prompt="Summarize all changes made in the revised report compared to the old report.">Summarize Changes</button>
+                        <button type="button" class="prompt-suggestion-btn" data-prompt="Verify if the final value in the revised report is consistent with market trends mentioned in the old report.">Value Consistency</button>
+                        <button type="button" class="prompt-suggestion-btn" data-prompt="Verify below Report Rejection Reason in revised report
+                        
+">Report Rejection Reason Check</button>
+                    </div>
+                    <form action="{% url 'update_file_review_custom_analysis' %}" method="post" id="custom-analysis-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="revised_filename" value="{{ revised_filename }}">
+                        <input type="hidden" name="old_filename" value="{{ old_filename }}">
+                        {% if results.optional_files.order_form.name %}<input type="hidden" name="order_form_filename" value="{{ results.optional_files.order_form.name }}">{% endif %}
+                        {% if results.optional_files.purchase_copy.name %}<input type="hidden" name="purchase_copy_filename" value="{{ results.optional_files.purchase_copy.name }}">{% endif %}
+                        {% if results.optional_files.engagement_letter.name %}<input type="hidden" name="engagement_letter_filename" value="{{ results.optional_files.engagement_letter.name }}">{% endif %}
+                        <textarea name="custom_prompt" placeholder="e.g., 'Are there any discrepancies in the borrower name across all documents?'">{% if custom_prompt %}{{ custom_prompt }}{% endif %}</textarea>
+                        <button type="submit" class="btn-submit">Run Custom Analysis</button>
+                    </form>
+                </div>
+            </div>
+
+            <div style="flex: 1;">
+                <h2>Analysis Results</h2>
+                {% if custom_analysis_results %}
+                <div class="custom-analysis-results">
+                    {% if custom_analysis_results.error %}
+                        <div class="error-message">
+                            <p><strong>Custom Analysis Error:</strong> {{ custom_analysis_results.error }}</p>
+                        </div>
+                    {% else %}
+                        <div class="query-display">
+                            <p><strong>Your Query:</strong></p>
+                            <p><em>{{ custom_prompt }}</em></p>
+                        </div>
+
+                        <div class="custom-analysis-summary">
+                            <p><strong>Analysis Summary:</strong></p>
+                            <p>{{ custom_analysis_results.analysis_summary }}</p>
+                        </div>
+
+                        {% if custom_analysis_results.findings %}
+                            <h4 style="margin-top: 30px;">Findings:</h4>
+                            <table class="findings-table">
+                                <thead>
+                                    <tr>
+                                        <th>Status</th>
+                                        <th>Detail</th>
+                                        <th>Finding</th>
+                                        <th>Source Location</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for finding in custom_analysis_results.findings %}
+                                    <tr>
+                                        <td><span class="status-{{ finding.status|lower }}">{{ finding.status }}</span></td>
+                                        <td>{{ finding.finding_detail }}</td>
+                                        <td>{{ finding.finding_title }}</td>
+                                        <td>{{ finding.source_location }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        {% else %}
+                            <p>No specific findings were extracted for this query.</p>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                {% else %}
+                    <div class="placeholder-text" style="border: 2px dashed #e5e7eb; border-radius: 8px; padding: 2rem; text-align: center; color: #6b7280;">
+                        <p>Your analysis results will appear here.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('custom-analysis-form');
+    if (form) {
+        form.addEventListener('submit', function() {
+            const overlay = document.getElementById('loader-overlay');
+            if(overlay) {
+                overlay.style.display = 'flex';
+            }
+        });
+
+        // Add functionality for prompt suggestion buttons
+        document.querySelectorAll('.prompt-suggestion-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const promptText = this.getAttribute('data-prompt');
+                const textarea = document.querySelector('#custom-analysis-form textarea[name="custom_prompt"]');
+                textarea.value = promptText;
+                textarea.focus();
+            });
+        });
+    }
+});
+</script>
+{% endblock %}
