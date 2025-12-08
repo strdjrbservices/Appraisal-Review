@@ -547,23 +547,21 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                 </div>
             </div>
         {% elif section_key == 'sale_history' %}
-            {% if show_revision_helper %}
-                <div class="revision-helper-card">
-                    <div class="revision-helper-header">
-                        <h3>Sale History Section Revision Helper</h3>
-                        <button class="toggle-revision-helper-btn">Show</button>
-                    </div>
-                    <div class="revision-helper-content">
-                        <p>Use this checklist to verify common revision requests for the <strong>Sale History</strong> section.</p>
-                        <ul class="revision-helper-list">
-                            <li>Please check that your research "Did" reveal a prior sale, as Comp 3 sold within a year.</li>
-                            <li>Please check that your research "Did Not" reveal any prior sales for the comparables.</li>
-                            <li>Please check that your research "Did" reveal a prior sale, as the Subject sold within 3 years.</li>
-                            <li>Please check that your research "Did Not" reveal a prior sale, as the Subject has not sold within 3 years.</li>
-                        </ul>
-                    </div>
+            <div class="revision-helper-card">
+                <div class="revision-helper-header">
+                    <h3>Sale History Section Revision Helper</h3>
+                    <button class="toggle-revision-helper-btn">Show</button>
                 </div>
-            {% endif %}
+                <div class="revision-helper-content">
+                    <p>Use this checklist to verify common revision requests for the <strong>Sale History</strong> section.</p>
+                    <ul class="revision-helper-list">
+                        <li>Please check that your research "Did" reveal a prior sale, as Comp 3 sold within a year.</li>
+                        <li>Please check that your research "Did Not" reveal any prior sales for the comparables.</li>
+                        <li>Please check that your research "Did" reveal a prior sale, as the Subject sold within 3 years.</li>
+                        <li>Please check that your research "Did Not" reveal a prior sale, as the Subject has not sold within 3 years.</li>
+                    </ul>
+                </div>
+            </div>
             <h3>Prior Sale History Grid</h3>
             {% if data.subject and data.comparables %}
                 <table>
@@ -604,6 +602,20 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                     {% endfor %}
                 </tbody>
             </table>
+            <div class="custom-analysis-card" style="margin-top: 40px;">
+                <h3>Default Sale History Analysis</h3>
+                <p>Click the button below to run a default set of validation checks on the sale history data based on common requirements.</p>
+                <form action="{% url 'extract_section' filename=filename section_name='custom_analysis' %}" method="post" id="default-analysis-form">
+                    {% csrf_token %}
+                    <textarea name="custom_prompt" style="display:none;">
+1. In sales history please check and validate as below :
+a.  The question "research the sale or transfer history of the subject property and comparable sales. If not, explain" should always be marked "did"
+b. for question "any prior sales or transfers of the subject property for the three years prior to the effective date of this appraisal." if the checkmark is on did, then the Date of Prior Sale/Transfer of subject should have date within or same 3 years of "as of" date from reconcilation section and  Price of Prior Sale/Transfer should be present. If checkmark is on "did not" then any value present would be fine.
+c. for question " any prior sales or transfers of the comparable sales for the year prior to the date of sale of the comparable sale.." if the checkmark is on did, then the Date of Prior Sale/Transfer of respective comp should have date within or same as 1 years of   sale date which is "S" Date of Sale/Time" in sales grid and  Price of Prior Sale/Transfer should be present. If checkmark is on "did not" then any value present would be fine.
+                    </textarea>
+                    <button type="submit" class="btn-submit" data-form-id="default-analysis-form">Run Default Analysis</button>
+                </form>
+            </div>
         {% elif section_key == 'rental_grid' %}
             {% if show_revision_helper %}
                 <div class="revision-helper-card">
@@ -3286,6 +3298,14 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                         window.location.href = "{% url 'upload_pdf' %}";
                     });
                 }
+            }
+
+            // Add loader for the new default analysis form
+            const defaultAnalysisButton = document.querySelector('button[data-form-id="default-analysis-form"]');
+            if (defaultAnalysisButton) {
+                defaultAnalysisButton.addEventListener('click', function() {
+                    document.getElementById('loading-overlay').style.display = 'flex';
+                });
             }
 
             // --- Revision Helper Toggle ---

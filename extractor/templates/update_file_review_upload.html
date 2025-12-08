@@ -52,6 +52,13 @@
         setupDragAndDrop('file-drop-zone-old', 'old_report', 'file-name-old');
         setupDragAndDrop('file-drop-zone-html', 'html_file', 'file-name-html');
         setupDragAndDrop('file-drop-zone-purchase', 'purchase_copy_file', 'file-name-purchase');
+
+        const uploadForm = document.getElementById('upload-form');
+        if (uploadForm) {
+            uploadForm.addEventListener('submit', function() {
+                document.getElementById('loader-overlay').style.display = 'flex';
+            });
+        }
     });
 </script>
 {% endblock %}

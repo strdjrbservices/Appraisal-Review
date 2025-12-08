@@ -1097,6 +1097,10 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
         You have been provided with one or more documents (like an original appraisal, a 1004D, an order form, etc.) and a specific query from a user.
         Analyze all provided documents and context thoroughly to answer the user's query.
 
+        **Important Context for Analysis:**
+        - The "as of" date for an appraisal is the 'Effective Date of Value' found in the 'Reconciliation' section.
+        - The sale date for a comparable property is the 'Date of Sale/Time' found in the 'Sales Comparison Approach' grid.
+
         **User's Query:**
         "{custom_prompt}"
 

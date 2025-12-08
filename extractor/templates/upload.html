@@ -128,6 +128,13 @@
 
 {% block extra_js %}
 <script>
+    // Show loader on form submission
+    const fullReviewForm = document.getElementById('upload-form-full');
+    if (fullReviewForm) {
+        fullReviewForm.addEventListener('submit', function() {
+            document.getElementById('loader-overlay').style.display = 'flex';
+        });
+    }
     document.addEventListener('DOMContentLoaded', function() {
         function setupDragAndDrop(dropZoneId, fileInputId, fileNameId) {
             const dropZone = document.getElementById(dropZoneId);
@@ -154,15 +161,6 @@
         setupDragAndDrop('file-drop-zone-html', 'html_file', 'file-name-html');
         setupDragAndDrop('file-drop-zone-purchase', 'purchase_copy_file', 'file-name-purchase');
         setupDragAndDrop('file-drop-zone-engagement', 'engagement_letter_file', 'file-name-engagement');
-
-        // Show loader on form submission
-        const fullReviewForm = document.getElementById('upload-form-full');
-        if (fullReviewForm) {
-            fullReviewForm.addEventListener('submit', function() {
-                const overlay = document.getElementById('loader-overlay');
-                if (overlay) overlay.style.display = 'flex';
-            });
-        }
     });
 </script>
 {% endblock %}
