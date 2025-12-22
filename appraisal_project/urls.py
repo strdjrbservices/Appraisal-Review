@@ -16,9 +16,10 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from extractor.admin_site import custom_admin
 
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path('admin/', custom_admin.urls),
     path('', include('extractor.urls')),
 ]

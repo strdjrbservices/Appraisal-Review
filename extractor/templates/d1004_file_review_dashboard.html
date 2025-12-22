@@ -102,5 +102,31 @@ document.querySelectorAll('.section-button').forEach(button => {
         document.getElementById('loader-overlay').style.display = 'flex';
     });
 });
+
+document.addEventListener('DOMContentLoaded', function() {
+    const timerDisplay = document.getElementById('review-timer');
+    if (timerDisplay) {
+        let timerInterval;
+        // When the dashboard page loads, it's a new session, so we set the start time.
+        const startTime = Date.now();
+        sessionStorage.setItem('reviewStartTime', startTime);
+
+        function updateTimer() {
+            const now = Date.now();
+            const elapsed = Math.floor((now - startTime) / 1000); // total seconds
+
+            const hours = Math.floor(elapsed / 3600);
+            const minutes = Math.floor((elapsed % 3600) / 60);
+            const secs = elapsed % 60;
+
+            timerDisplay.textContent =
+                String(hours).padStart(2, '0') + ':' +
+                String(minutes).padStart(2, '0') + ':' +
+                String(secs).padStart(2, '0');
+        }
+        updateTimer(); // Run once immediately
+        timerInterval = setInterval(updateTimer, 1000);
+    }
+});
 </script>
 {% endblock %}

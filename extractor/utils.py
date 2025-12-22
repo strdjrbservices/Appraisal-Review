@@ -47,7 +47,7 @@ def _extract_from_html_file(file_path):
             return default
 
         data['Client/Lender Name'] = get_text_from_label('Client Name')
-        data['Lender Address'] = get_text_from_label('Lender Address')
+        data['Lender Address'] = get_text_from_label('Client Address') # Corrected label text to match HTML
         data['FHA Case Number'] = get_text_from_label('FHA Case Number')
         data['Transaction Type'] = get_text_from_label('Transaction Type')
         data['AMC Reg. Number'] = get_text_from_label('AMC Reg. Number') # Using 'Borrower Name' was too generic and was matching other elements.

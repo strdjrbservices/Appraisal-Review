@@ -86,9 +86,11 @@
         <div class="sections-column">
             <h2>Select a section to review</h2>
             <div class="section-grid">
-                <a href="{% url 'update_file_review_process' %}?revised_filename={{ revised_filename }}&old_filename={{ old_filename }}" class="section-button">
+                {% with order_form_filename=optional_files.order_form.name|default:'' purchase_copy_filename=optional_files.purchase_copy.name|default:'' engagement_letter_filename=optional_files.engagement_letter.name|default:'' %}
+                <a href="{% url 'update_file_review_process' %}?revised_filename={{ revised_filename }}&old_filename={{ old_filename }}&order_form_filename={{ order_form_filename }}&purchase_copy_filename={{ purchase_copy_filename }}&engagement_letter_filename={{ engagement_letter_filename }}" class="section-button">
                     Comparison Summary
                 </a>
+                {% endwith %}
                 {% for section_name, display_name in sections.items %}
                     <a href="{% url 'extract_section' filename=revised_filename section_name=section_name %}" class="section-button">
                         {{ display_name }}
@@ -110,6 +112,32 @@ document.querySelectorAll('.section-button').forEach(button => {
     button.addEventListener('click', function() {
         document.getElementById('loader-overlay').style.display = 'flex';
     });
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const timerDisplay = document.getElementById('review-timer');
+    if (timerDisplay) {
+        let timerInterval;
+        // When the dashboard page loads, it's a new session, so we set the start time.
+        const startTime = Date.now();
+        sessionStorage.setItem('reviewStartTime', startTime);
+
+        function updateTimer() {
+            const now = Date.now();
+            const elapsed = Math.floor((now - startTime) / 1000); // total seconds
+
+            const hours = Math.floor(elapsed / 3600);
+            const minutes = Math.floor((elapsed % 3600) / 60);
+            const secs = elapsed % 60;
+
+            timerDisplay.textContent =
+                String(hours).padStart(2, '0') + ':' +
+                String(minutes).padStart(2, '0') + ':' +
+                String(secs).padStart(2, '0');
+        }
+        updateTimer(); // Run once immediately
+        timerInterval = setInterval(updateTimer, 1000);
+    }
 });
 </script>
 {% endblock %}

@@ -56,6 +56,18 @@
         const uploadForm = document.getElementById('upload-form');
         if (uploadForm) {
             uploadForm.addEventListener('submit', function() {
+                // Clear session storage for a new review session
+                sessionStorage.removeItem('reviewStartTime');
+                sessionStorage.removeItem('isPurchaseTransaction');
+                sessionStorage.removeItem('isRefinanceTransaction');
+                sessionStorage.removeItem('isPUD');
+                sessionStorage.removeItem('subjectLenderClient');
+                sessionStorage.removeItem('subjectLenderAddress');
+                sessionStorage.removeItem('subjectFullAddress');
+                sessionStorage.removeItem('subjectState');
+                sessionStorage.removeItem('isFhaCase');
+                sessionStorage.removeItem('improvementStatus');
+                sessionStorage.removeItem('reconciliationEffectiveDate');
                 document.getElementById('loader-overlay').style.display = 'flex';
             });
         }

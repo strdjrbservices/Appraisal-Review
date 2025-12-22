@@ -107,23 +107,23 @@ SALES_COMPARISON_APPROACH_FIELDS_ADJUSTMENT = [
     "Sale Price/Gross Liv. Area",
     "Data Source(s)", 
     "Verification Source(s)",
-    "Sale or Financing Concessions Adjustment",
-    "Date of Sale/Time Adjustment",
-    "Location Adjustment",
-    "Leasehold/Fee Simple Adjustment",
-    "Site Adjustment",
-    "View Adjustment",
-    "Design (Style) Adjustment",
-    "Quality of Construction Adjustment",
-    "Actual Age Adjustment",
-    "Condition Adjustment",
-    "Gross Living Area Adjustment",
-    "Basement & Finished Rooms Below Grade Adjustment",
-    "Functional Utility Adjustment",
-    "Heating/Cooling Adjustment",
-    "Energy Efficient Items Adjustment",
-    "Garage/Carport Adjustment",
-    "Porch/Patio/Deck Adjustment",
+    "Sale or Financing Concessions", "Sale or Financing Concessions Adjustment",
+    "Date of Sale/Time", "Date of Sale/Time Adjustment",
+    "Location", "Location Adjustment",
+    "Leasehold/Fee Simple", "Leasehold/Fee Simple Adjustment",
+    "Site", "Site Adjustment",
+    "View", "View Adjustment",
+    "Design (Style)", "Design (Style) Adjustment",
+    "Quality of Construction", "Quality of Construction Adjustment",
+    "Actual Age", "Actual Age Adjustment",
+    "Condition", "Condition Adjustment",
+    "Gross Living Area", "Gross Living Area Adjustment",
+    "Basement & Finished Rooms Below Grade", "Basement & Finished Rooms Below Grade Adjustment",
+    "Functional Utility", "Functional Utility Adjustment",
+    "Heating/Cooling", "Heating/Cooling Adjustment",
+    "Energy Efficient Items", "Energy Efficient Items Adjustment",
+    "Garage/Carport", "Garage/Carport Adjustment",
+    "Porch/Patio/Deck", "Porch/Patio/Deck Adjustment",
     "Net Adjustment (Total)", 
     "Adjusted Sale Price of Comparable",
 ]
@@ -930,7 +930,7 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
 
     elif section_name.lower() == 'sales_grid_adjustment':
         prompt = f"""
-        You are an expert AI assistant specializing in real estate appraisal review. Your task is to analyze the Sales Comparison Approach grid for adjustment consistency.
+        You are an expert AI assistant specializing in real estate appraisal review. Your task is to analyze the Sales Comparison Approach grid for adjustment consistency, accuracy, and logic.
         Analyze the provided PDF document to extract data for the Subject property and all Comparable properties, and then provide a summary of adjustment consistency.
 
         Your output must be a single, valid JSON object with the following top-level keys:
@@ -941,46 +941,59 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
             *   `"details"`: An array of strings, where each string is a detailed explanation of a specific finding (consistent or inconsistent).
 
         **Instructions:**
-        1.  **Extract Data:** For the subject and each comparable, extract all fields listed below. If a field is blank, empty, or not applicable (e.g., '--'), use `null` as its value. Pay close attention to negative adjustments in parentheses.
+        1.  **Extract Data:** For the subject and each comparable, extract all fields listed below. 
+            *   **Crucial:** If a field is blank, empty, or not applicable (e.g., '--'), use `null` as its value. 
+            *   **Signs:** Pay extremely close attention to negative adjustments. They are often in parentheses `($5,000)` or have a minus sign. You MUST extract them as negative numbers (e.g., "-5000"). Positive adjustments may have a `+` or no sign.
         2.  **Perform Detailed Validation and Analysis:**
-            *   **Sale Price Bracketing:** Find the final "Opinion of Market Value" from the Reconciliation section. Verify if this value is bracketed by the sale prices of the comparables (i.e., the final value is not lower than the lowest comp sale price and not higher than the highest comp sale price). Report this as a finding.
+            *   **Sale Price Bracketing:** Find the final "Opinion of Market Value" (usually in the Reconciliation section or at the bottom of the Sales Grid). Verify if this value is bracketed by the unadjusted sale prices of the comparables (i.e., the final value is not lower than the lowest comp sale price and not higher than the highest comp sale price). Report this as a finding.
             *   **Blank Field Check:** For each comparable, verify that the following fields are NOT blank or null: `Sale Price/Gross Liv. Area`, `Data Source(s)`, and `Verification Source(s)`. Report any comparables with missing data for these fields.
             *   **Data Source Content:** For the `Data Source(s)` field, verify it contains a value (e.g., 'MLS# 12345') or at least the word 'Unknown'. Report if it's blank.
-            *   **Financing Concessions:** For each comparable, if `Sale or Financing Concessions` is '0', 'none', or contains 'conv', the `Sale or Financing Concessions Adjustment` must be '0' or blank. If `Sale or Financing Concessions` is a non-zero value (e.g., '$5,000'), the adjustment must be negative with the same absolute value (e.g., '-$5,000'). Report any mismatches.
-            *   **Date of Sale / Time Adjustment:** Find the 'Date of Contract' from the Contract section. For each comparable, verify that its 'Date of Sale/Time' is after the 'Date of Contract'. If a `Date of Sale/Time Adjustment` is present for any comparable, verify that a comment explaining the time adjustment exists elsewhere in the report (e.g., in an addendum). Report any issues.
-            *   **Location Adjustment:** If the subject's `Location` is 'A' and a comparable's is 'N', verify that a negative adjustment is applied. If the subject is 'N' and a comp is 'A', verify a positive adjustment. Report on the consistency of this logic.
-            *   **Leasehold/Fee Simple Adjustment:** If a comparable's `Leasehold/Fee Simple` value is different from the subject's, verify that an adjustment (either '0' or another value) is present.
-            *   **General Adjustment Consistency:** For all other features (View, Design, Quality, Condition, etc.), an adjustment is consistent if the same dollar amount is applied for the same feature difference from the subject. For example, if Comp 1 and Comp 2 both have a 'Superior' view compared to the subject's 'Average' view, their 'View Adjustment' should be identical. Report any inconsistencies.
-            *   **GLA Adjustment:** Calculate the adjustment rate per square foot for each comparable (`Gross Living Area Adjustment` / difference in GLA from subject). Report if this rate is consistent across all comparables.
-            *   **Basement Adjustment:** If the subject has a basement and a comparable does not, a positive adjustment should be made. If the subject has no basement and a comparable does, a negative adjustment should be made. Report on the consistency of this logic.
+            *   **Financing Concessions:** If a comp has concessions (e.g., '$5,000'), the `Sale or Financing Concessions Adjustment` should be negative. If concessions are 'None' or '0', adjustment should be 0 or null.
+            *   **Date of Sale / Time:** 
+                *   Check if `Date of Sale` is > 12 months from Effective Date.
+                *   If `Date of Sale/Time Adjustment` is not 0, verify a comment explains market conditions.
+            *   **Location & View:** 
+                *   If Subject and Comp have the *same* rating (e.g., both "N;Res"), adjustment must be 0.
+                *   If Comp is Superior to Subject -> Adjustment should be Negative.
+                *   If Comp is Inferior to Subject -> Adjustment should be Positive.
+            *   **Design, Quality, Condition:**
+                *   Consistency Check: If Comp 1 and Comp 2 have the same rating difference vs Subject (e.g., Subject Q4, Comp 1 Q3, Comp 2 Q3), they should have the same adjustment.
+                *   Directional Check: Superior Comp -> Negative Adj; Inferior Comp -> Positive Adj.
+            *   **GLA Adjustment:**
+                *   Calculate `GLA Difference` = Subject GLA - Comp GLA.
+                *   If `GLA Difference` is positive (Subject is larger), adjustment should be Positive.
+                *   If `GLA Difference` is negative (Subject is smaller), adjustment should be Negative.
+                *   Calculate `Adjustment Rate` = Adjustment / GLA Difference. Check if this rate is consistent across all comps (allow small rounding differences).
+            *   **Basement Adjustment:**
+                *   Compare Total Basement Area and Finished Area.
+                *   If Subject has more basement/finish -> Positive Adjustment.
+                *   If Subject has less -> Negative Adjustment.
             *   **Net and Gross Adjustments:**
-                *   **Net Adjustment:** For each comparable, sum all individual adjustments. Verify this sum equals the `Net Adjustment (Total)`. Report any calculation errors.
-                *   **Gross Adjustment:** For each comparable, sum the absolute values of all individual adjustments. Calculate the Gross Adjustment Percentage (Gross Adjustment / Sale Price). Report if this percentage exceeds 15% for any comparable.
-            *   **Adjusted Sale Price:** For each comparable, calculate `Sale Price + Net Adjustment (Total)`. Verify this equals the `Adjusted Sale Price of Comparable`. Report any calculation errors.
-        3.  **Report All Findings:** In the `"details"` array, report the outcome of each validation check. For inconsistencies, clearly describe the discrepancy.
+                *   **Recalculate Net:** Sum all individual adjustments for each comp. Compare with extracted `Net Adjustment (Total)`. Report discrepancies.
+                *   **Recalculate Gross:** Sum absolute values of adjustments.
+                *   **Guidelines:** Flag if Net Adjustment > 15% of Sale Price. Flag if Gross Adjustment > 25% of Sale Price.
+            *   **Adjusted Sale Price:** 
+                *   Recalculate: `Sale Price` + `Net Adjustment`. Compare with extracted `Adjusted Sale Price of Comparable`.
+
+        3.  **Report All Findings:** In the `"details"` array, report the outcome of each validation check. For inconsistencies, clearly describe the discrepancy (e.g., "Comp 1 GLA adjustment is positive but Comp is larger than Subject").
 
         **Fields to Extract for Subject and each Comparable:**
         {json.dumps(fields_to_extract, indent=2)}
 
         **Example of the final JSON structure:**
         {{
-            "subject": {{ "Address": "123 Main St", "Condition": "Good", "Gross Living Area": "1850", ... }},
+            "subject": {{ "Address": "123 Main St", "Condition": "C3", "Gross Living Area": "1850", ... }},
             "comparables": [
-                {{ "Address": "456 Oak Ave", "Condition": "Average", "Condition Adjustment": "-$3,000", ... }},
-                {{ "Address": "789 Pine Ln", "Condition": "Good", "Condition Adjustment": "$0", ... }},
-                {{ "Address": "101 Maple Dr", "Condition": "Average", "Condition Adjustment": "-$5,000", ... }}
+                {{ "Address": "456 Oak Ave", "Condition": "C4", "Condition Adjustment": "-$3,000", ... }},
+                {{ "Address": "789 Pine Ln", "Condition": "C3", "Condition Adjustment": "$0", ... }}
             ],
             "adjustment_analysis": {{
-                "summary": "Inconsistencies found in Condition and Financing Concession adjustments. Sale price is not bracketed.",
+                "summary": "Adjustments are generally consistent, but Comp 1 has a calculation error.",
                 "details": [
-                    "Sale Price Bracketing: Failed. The final appraised value of $560,000 is higher than the highest comparable sale price of $555,000.",
-                    "Blank Field Check: Passed. All required fields are filled for all comparables.",
-                    "Financing Concessions: Inconsistent. Comp 2 had concessions of $3,000 but the adjustment was $0 instead of -$3,000.",
-                    "Condition Adjustment: Inconsistent. Comp 1 received a -$3,000 adjustment for 'Average' condition, while Comp 3 received a -$5,000 adjustment for the same 'Average' condition.",
+                    "Sale Price Bracketing: Passed. Value is within range.",
                     "GLA Adjustment: Consistent. A rate of $50/sq. ft. was applied across all comparables.",
-                    "Location Adjustment: Not applied. All comparables were in a similar location to the subject.",
-                    "Net/Gross Adjustments: Failed. Comp 1 Gross Adjustment Percentage is 18%, which exceeds the 15% guideline.",
-                    "Adjusted Sale Price: Failed. Comp 2 Adjusted Sale Price is calculated as $545,000 but is listed as $540,000 in the grid."
+                    "Net/Gross Adjustments: Failed. Comp 1 Net Adjustment exceeds 15%.",
+                    "Adjusted Sale Price: Failed. Comp 1 Adjusted Price calculation is off by $100."
                 ]
             }}
         }}
@@ -1158,7 +1171,7 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
             if pdf_path and os.path.exists(pdf_path):
                 prelim_file = await asyncio.to_thread(client.files.upload, file=pdf_path)
                 while prelim_file.state.name == "PROCESSING":
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(1)
                     prelim_file = await asyncio.to_thread(client.files.get, name=prelim_file.name)
             else:
                 return {"error": "PDF file for state extraction not found."}
@@ -1167,7 +1180,7 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
 
             state_response = await asyncio.to_thread(
                 client.models.generate_content,
-                model="gemini-2.5-flash",
+                model="gemini-2.5-flash-lite",
                 contents=[prelim_file, state_prompt],
             )
             state_data = json.loads(state_response.text.strip().lstrip("```json").rstrip("```"))
@@ -1985,36 +1998,51 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
 
     uploaded_files_for_prompt = []
     try:
-        # Upload all provided PDF files
-        for path in pdf_paths:
+        async def upload_and_wait(path):
             if not os.path.exists(path):
                 logger.warning(f"File not found during extraction: {path}")
-                continue
+                return None
             
-            uploaded_file = await asyncio.to_thread(
-                client.files.upload,
-                file=path
-            )
-            uploaded_files_for_prompt.append(uploaded_file)
-
-        # Wait for all files to be active
-        for i, uploaded_file in enumerate(uploaded_files_for_prompt):
+            uploaded_file = await asyncio.to_thread(client.files.upload, file=path)
+            
             while uploaded_file.state.name == "PROCESSING":
-                logger.info(f"Waiting for file {uploaded_file.name} to be processed...")
-                await asyncio.sleep(10)
+                await asyncio.sleep(1)
                 uploaded_file = await asyncio.to_thread(client.files.get, name=uploaded_file.name)
-                uploaded_files_for_prompt[i] = uploaded_file # Update the list with the new status
-
+            
             if uploaded_file.state.name != "ACTIVE":
                 logger.error(f"File {uploaded_file.name} is not in an ACTIVE state. Current state: {uploaded_file.state.name}")
-                return {"error": f"File processing failed for {uploaded_file.name}. State: {uploaded_file.state.name}"}
+                raise Exception(f"File processing failed for {uploaded_file.name}. State: {uploaded_file.state.name}")
+            
             logger.info(f"File {uploaded_file.name} is now ACTIVE.")
+            return uploaded_file
 
-        response = await asyncio.to_thread(
-            client.models.generate_content,
-            model="gemini-2.5-flash",
-            contents=[*uploaded_files_for_prompt, prompt],
-        )
+        # Upload all provided PDF files concurrently
+        upload_tasks = [upload_and_wait(path) for path in pdf_paths]
+        results = await asyncio.gather(*upload_tasks)
+        uploaded_files_for_prompt = [f for f in results if f is not None]
+
+        # Retry logic for 503 Service Unavailable (Model Overloaded)
+        max_retries = 5
+        base_delay = 2
+        response = None
+
+        for attempt in range(max_retries):
+            try:
+                response = await asyncio.to_thread(
+                    client.models.generate_content,
+                    model="gemini-2.5-flash-lite",
+                    contents=[*uploaded_files_for_prompt, prompt],
+                )
+                break
+            except Exception as e:
+                # Check for 503 or "overloaded" in error message
+                error_str = str(e)
+                if ("503" in error_str or "overloaded" in error_str.lower()) and attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)  # Exponential backoff
+                    logger.warning(f"Model overloaded (503). Retrying in {delay} seconds... (Attempt {attempt + 1}/{max_retries})")
+                    await asyncio.sleep(delay)
+                else:
+                    raise e
 
         # The model's response text should be a JSON string. We parse it into a Python dict.
         # We also clean up potential markdown code fences.

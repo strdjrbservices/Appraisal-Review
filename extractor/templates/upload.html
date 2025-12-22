@@ -132,6 +132,19 @@
     const fullReviewForm = document.getElementById('upload-form-full');
     if (fullReviewForm) {
         fullReviewForm.addEventListener('submit', function() {
+            // Clear session storage for a new review session
+            sessionStorage.removeItem('reviewStartTime');
+            sessionStorage.removeItem('isPurchaseTransaction');
+            sessionStorage.removeItem('isRefinanceTransaction');
+            sessionStorage.removeItem('isPUD');
+            sessionStorage.removeItem('subjectLenderClient');
+            sessionStorage.removeItem('subjectLenderAddress');
+            sessionStorage.removeItem('subjectFullAddress');
+            sessionStorage.removeItem('subjectState');
+            sessionStorage.removeItem('isFhaCase');
+            sessionStorage.removeItem('improvementStatus');
+            sessionStorage.removeItem('reconciliationEffectiveDate');
+            sessionStorage.removeItem('salesGridIndicatedValue');
             document.getElementById('loader-overlay').style.display = 'flex';
         });
     }

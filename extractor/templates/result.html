@@ -2743,6 +2743,121 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                 }
                 {% endif %}
 
+                {% if section_key == 'report_details' %}
+                // --- Report Details Validation ---
+                const addValidationMessage = (type, message) => {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message', `validation-${type}`);
+                    messageDiv.innerHTML = message;
+                    validationContainer.appendChild(messageDiv);
+                };
+
+                const missingItems = [];
+                tableRows.forEach(row => {
+                    const fieldCell = row.querySelector('td:first-child');
+                    const valueCell = row.querySelector('td:last-child');
+                    if (fieldCell && valueCell) {
+                        const value = valueCell.textContent.trim().toLowerCase();
+                        if (value === 'missing') {
+                            missingItems.push(fieldCell.textContent.trim());
+                        }
+                    }
+                });
+
+                if (missingItems.length > 0) {
+                    addValidationMessage('error', `⚠️ Validation Failed: The following required sections/comments are missing from the report: ${missingItems.join(', ')}.`);
+                } else {
+                    addValidationMessage('success', '✅ Validation Passed: All required sections and comments appear to be present.');
+                }
+                {% endif %}
+
+                {% if section_key == 'escalation_check' %}
+                // --- Escalation Check Validation ---
+                const addValidationMessage = (type, message) => {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message', `validation-${type}`);
+                    messageDiv.innerHTML = message;
+                    validationContainer.appendChild(messageDiv);
+                };
+                const failedChecks = [];
+                tableRows.forEach(row => {
+                    const findingText = row.querySelector('td:last-child')?.textContent.trim().toLowerCase();
+                    if (findingText && (findingText.includes('failed') || findingText.includes('critical warning'))) {
+                        failedChecks.push(row.querySelector('td:first-child')?.textContent.trim());
+                    }
+                });
+
+                if (failedChecks.length > 0) {
+                    addValidationMessage('error', `🚨 Escalation Required: The following checks have failed: <strong>${failedChecks.join(', ')}</strong>. Please review the details.`);
+                }
+                {% endif %}
+
+                {% if section_key == 'rental_grid' %}
+                // --- Rental Grid Validation ---
+                const addValidationMessage = (type, message) => {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message', `validation-${type}`);
+                    messageDiv.innerHTML = message;
+                    validationContainer.appendChild(messageDiv);
+                };
+
+                const indicatedMarketRentRow = Array.from(tableRows).find(r => r.querySelector('td:first-child strong')?.textContent.trim() === 'Indicated Monthly Market Rent');
+                const indicatedRentValue = indicatedMarketRentRow ? indicatedMarketRentRow.querySelector('td:last-child strong')?.textContent.trim() : null;
+                const normalizedIndicatedRent = indicatedRentValue ? parseFloat(indicatedRentValue.replace(/[$,]/g, '')) : null;
+
+                let adjustedRents = [];
+                let proximityMissing = false;
+                let dateLogicError = false;
+
+                // Find the rows for 'Adjusted Monthly Rent', 'Proximity to Subject', 'Date Lease Begins', 'Date Lease Expires'
+                const adjustedRentRow = Array.from(tableRows).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Adjusted Monthly Rent');
+                const proximityRow = Array.from(tableRows).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Proximity to Subject');
+                const leaseBeginsRow = Array.from(tableRows).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Date Lease Begins');
+                const leaseExpiresRow = Array.from(tableRows).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Date Lease Expires');
+
+                if (adjustedRentRow) {
+                    const compCells = Array.from(adjustedRentRow.querySelectorAll('td')).slice(2); // Skip Feature and Subject
+                    compCells.forEach(cell => {
+                        const rent = cell.textContent.trim();
+                        if (rent) {
+                            const normRent = parseFloat(rent.replace(/[$,]/g, ''));
+                            if (!isNaN(normRent)) adjustedRents.push(normRent);
+                        }
+                    });
+                }
+
+                if (proximityRow) {
+                    const proxCells = Array.from(proximityRow.querySelectorAll('td')).slice(2);
+                    if (proxCells.some(cell => !cell.textContent.trim() || cell.textContent.trim() === '--')) {
+                        proximityMissing = true;
+                    }
+                }
+
+                if (leaseBeginsRow && leaseExpiresRow) {
+                    const beginCells = Array.from(leaseBeginsRow.querySelectorAll('td')).slice(2);
+                    const expireCells = Array.from(leaseExpiresRow.querySelectorAll('td')).slice(2);
+                    for (let i = 0; i < beginCells.length; i++) {
+                        const beginDate = new Date(beginCells[i].textContent.trim());
+                        const expireDate = new Date(expireCells[i].textContent.trim());
+                        if (!isNaN(beginDate.getTime()) && !isNaN(expireDate.getTime()) && expireDate <= beginDate) {
+                            dateLogicError = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (proximityMissing) addValidationMessage('error', "⚠️ Validation Failed: 'Proximity to Subject' must be noted for all rental comps.");
+                if (dateLogicError) addValidationMessage('error', "⚠️ Validation Failed: A rental comp's 'Date Lease Expires' is before or the same as its 'Date Lease Begins'.");
+
+                if (normalizedIndicatedRent !== null && adjustedRents.length > 0) {
+                    const minRent = Math.min(...adjustedRents);
+                    const maxRent = Math.max(...adjustedRents);
+                    if (normalizedIndicatedRent < minRent || normalizedIndicatedRent > maxRent) {
+                        addValidationMessage('error', `⚠️ Validation Failed: The 'Indicated Monthly Market Rent' ($${normalizedIndicatedRent}) is not bracketed by the adjusted rents of the comparables ($${minRent} - $${maxRent}).`);
+                    }
+                }
+                {% endif %}
+
                 {% if section_key == 'market_conditions' %}
                 // Validation for Market Conditions Inventory Analysis
                 const inventoryFieldPrefix = "Inventory Analysis";
@@ -2777,13 +2892,42 @@ c. for question " any prior sales or transfers of the comparable sales for the y
 
                 {% endif %}
 
+                {% if section_key == 'condo' %}
+                // --- Condo Section Validation ---
+                const addValidationMessage = (type, message) => {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message', `validation-${type}`);
+                    messageDiv.innerHTML = message;
+                    validationContainer.appendChild(messageDiv);
+                };
+
+                const missingGridFields = [];
+                const gridTable = document.querySelector('table'); // First table is the grid
+                if (gridTable) {
+                    const gridRows = gridTable.querySelectorAll('tbody tr');
+                    gridRows.forEach(row => {
+                        const valueCells = row.querySelectorAll('td.editable-value');
+                        valueCells.forEach(cell => {
+                            if (!cell.textContent.trim() || cell.textContent.trim() === '--' || cell.textContent.trim() === 'null') {
+                                missingGridFields.push(cell.dataset.fieldName || row.querySelector('td:first-child').textContent.trim());
+                            }
+                        });
+                    });
+                }
+
+                if (missingGridFields.length > 0) {
+                    addValidationMessage('error', `⚠️ Validation Failed: The following required fields in the 'Subject Project Data' grid are empty: ${missingGridFields.join(', ')}.`);
+                }
+                {% endif %}
+
                 {% if section_key == 'custom_analysis' %}
                 // Validation for GLA Consistency custom analysis
-                const customPrompt = `{{ custom_prompt|escapejs }}`.toLowerCase().trim();
+                const customPrompt = `{{ custom_prompt|escapejs }}`.toLowerCase().replace(/\s+/g, ' ').trim();
                 const analysisSummary = `{{ data.analysis_summary|escapejs }}`.toLowerCase();
-                const glaConsistencyPrompt = "check for any discrepancies in the gross living area (gla) across all sections of the report.";
+                
+                const isPrompt = (text) => customPrompt.includes(text.toLowerCase());
 
-                if (customPrompt === glaConsistencyPrompt && analysisSummary) {
+                if (isPrompt("discrepancies in the gross living area") && analysisSummary) {
                     const messageDiv = document.createElement('div');
                     messageDiv.classList.add('validation-message');
                     if (analysisSummary.includes('consistent') || analysisSummary.includes('no discrepancies') || analysisSummary.includes('consistently') || analysisSummary.includes('verified') || analysisSummary.includes('match')) {
@@ -2797,9 +2941,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                 }
 
                 // Validation for Subject Address and Photo custom analysis
-                const subjectAddressPrompt = "verify that the subject property address is consistent across the subject section, sales grid, location map, and aerial map\n\nalso please confirm subject street, front and rear photo are present and no duplicates.";
-
-                if (customPrompt === subjectAddressPrompt && analysisSummary) {
+                if (isPrompt("subject property address is consistent") && analysisSummary) {
                     const messageDiv = document.createElement('div');
                     messageDiv.classList.add('validation-message');
                     if (analysisSummary.includes('consistently') || analysisSummary.includes('verified') || analysisSummary.includes('match') || analysisSummary.includes('no discrepancies') || analysisSummary.includes('consistently') || analysisSummary.includes('present') || analysisSummary.includes('no duplicates')) {
@@ -2813,9 +2955,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                 }
 
                 // Validation for Compare Room Counts custom analysis
-                const roomCountsPrompt = "compare the bedroom and bathroom counts between the improvements section, sales grid, and all available floor plans/ sktech/ building sketch and all photos.";
-
-                if (customPrompt === roomCountsPrompt && analysisSummary) {
+                if (isPrompt("compare the bedroom and bathroom counts") && analysisSummary) {
                     const messageDiv = document.createElement('div');
                     messageDiv.classList.add('validation-message');
                     if ((analysisSummary.includes('consistent') || analysisSummary.includes('match')) && (analysisSummary.includes('distinct photos') || analysisSummary.includes('no duplicate') || analysisSummary.includes('consistently'))) {
@@ -2831,10 +2971,22 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                     validationContainer.appendChild(messageDiv);
                 }
 
-                // Validation for Verify Comparable Address and Photos custom analysis
-                const compAddressPrompt = "match all comparable property addresses between the sales grid, photo pages, and the location map.\n\nalso please confirm no duplicates.";
+                // Validation for Final Value Consistency
+                if (isPrompt("check consistent values") && isPrompt("indicated value by sales comparison approach") && analysisSummary) {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message');
+                    if (analysisSummary.includes('consistent') || analysisSummary.includes('match') || analysisSummary.includes('equal') || analysisSummary.includes('same')) {
+                        messageDiv.classList.add('validation-success');
+                        messageDiv.textContent = '✅ Validation Passed: The analysis summary indicates that the appraised values are consistent across sections.';
+                    } else {
+                        messageDiv.classList.add('validation-error');
+                        messageDiv.textContent = '⚠️ Validation Failed: The analysis summary indicates a discrepancy in the appraised values. Please review the findings.';
+                    }
+                    validationContainer.appendChild(messageDiv);
+                }
 
-                if (customPrompt === compAddressPrompt && analysisSummary) {
+                // Validation for Verify Comparable Address and Photos custom analysis
+                if (isPrompt("match all comparable property addresses") && analysisSummary) {
                     const messageDiv = document.createElement('div');
                     messageDiv.classList.add('validation-message');
                     if ((analysisSummary.includes('consistent') || analysisSummary.includes('match')) && (analysisSummary.includes('distinct photos') || analysisSummary.includes('no duplicate') || analysisSummary.includes('consistently') || analysisSummary.includes('distinct'))) {
@@ -2848,16 +3000,14 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                 }
 
                 // Validation for Verify Photo Lables custom analysis
-                const photoLabelsPrompt = "verify all photo labels and no duplicate photos";
-
-                if (customPrompt === photoLabelsPrompt && analysisSummary) {
+                if (isPrompt("verify all photo labels") && analysisSummary) {
                     const messageDiv = document.createElement('div');
                     messageDiv.classList.add('validation-message');
                     // Check for success keywords vs failure keywords.
-                    if (analysisSummary.includes('no duplicate photos were found')) {
+                    if (analysisSummary.includes('no duplicate photos were found') || (analysisSummary.includes('correctly labeled') && !analysisSummary.includes('duplicate'))) {
                         messageDiv.classList.add('validation-success');
                         messageDiv.textContent = '✅ Validation Passed: The analysis summary indicates all photos have labels and no duplicates were found.';
-                    } else if (analysisSummary.includes('duplicate photos were found')) {
+                    } else if (analysisSummary.includes('duplicate photos were found') || analysisSummary.includes('missing label')) {
                         messageDiv.classList.add('validation-error');
                         messageDiv.textContent = '⚠️ Validation Failed: The analysis summary indicates that duplicate photos were found. Please review the findings.';
                     } else {
@@ -2868,21 +3018,37 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                 }
 
                 // Validation for ADU Criteria Check
-                const aduCriteriaPrompt = "check  'one with accessory unit' is selected in improvements section, the following criteria must be met:\n\n1.  this box should be checked if there is an additional dwelling with both a kitchen (containing a stove) and a bath.\n    *   if there is interior access, the adu may be included in the main unit's details.\n    *   if there is no interior access, the adu must be listed as a separate line item.\n    *   if the adu is considered a second floor, it may be included in the main unit's details.\n\n2.  if the additional dwelling lacks either a kitchen or a bath, 'one with accessory unit' must be unchecked.\n\n3.  if a basement contains a kitchen and bath, 'one with accessory unit' can be checked or unchecked.\n\n4.  a room labeled 'kitchenette' should not have a stove; in this case, no health and safety comment is needed. however, if a kitchenette does contain a stove, escalate with a comment (permitted/health or safety).\n\n    escalation language: on page #, a room labeled as 'kitchenette' has a stove. please advise.";
-
-                if (customPrompt === aduCriteriaPrompt && analysisSummary) {
+                if (isPrompt("one with accessory unit' is selected") && analysisSummary) {
                     const messageDiv = document.createElement('div');
                     messageDiv.classList.add('validation-message');
                     // Check for success keywords vs failure keywords.
-                    if (analysisSummary.includes("report's selection aligns with the provided criteria") || analysisSummary.includes("correctly checked") || analysisSummary.includes("correctly unchecked") || analysisSummary.includes("checked") || analysisSummary.includes("unchecked")) {
+                    if (analysisSummary.includes("report's selection aligns") || analysisSummary.includes("correctly checked") || analysisSummary.includes("correctly unchecked") || (analysisSummary.includes("checked") && analysisSummary.includes("criteria met"))) {
                         messageDiv.classList.add('validation-success');
                         messageDiv.textContent = '✅ Validation Passed: The ADU selection aligns with the analysis criteria.';
-                    } else if (analysisSummary.includes("does not align") || analysisSummary.includes("incorrectly checked") || analysisSummary.includes("discrepancy")) {
+                    } else if (analysisSummary.includes("does not align") || analysisSummary.includes("incorrectly checked") || analysisSummary.includes("discrepancy") || analysisSummary.includes("failed")) {
                         messageDiv.classList.add('validation-error');
                         messageDiv.textContent = '⚠️ Validation Failed: The analysis summary indicates a discrepancy with the ADU criteria. Please review the findings.';
                     } else {
                         messageDiv.classList.add('validation-warning');
                         messageDiv.textContent = '❓ Validation Inconclusive: The ADU criteria analysis could not be definitively categorized. Please review manually.';
+                    }
+                    validationContainer.appendChild(messageDiv);
+                }
+
+                // Validation for Common Prompt
+                if (isPrompt("please check and verify if below revision requests are addressed") && analysisSummary) {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message');
+                    
+                    if (analysisSummary.includes("not corrected") || analysisSummary.includes("not addressed") || analysisSummary.includes("missing") || analysisSummary.includes("blank") || analysisSummary.includes("inconsistent")) {
+                         messageDiv.classList.add('validation-error');
+                         messageDiv.textContent = '⚠️ Validation Failed: The analysis indicates that some revision requests or checks were not addressed or failed. Please review the findings.';
+                    } else if (analysisSummary.includes("corrected") || analysisSummary.includes("addressed") || analysisSummary.includes("verified") || analysisSummary.includes("consistent")) {
+                        messageDiv.classList.add('validation-success');
+                        messageDiv.textContent = '✅ Validation Passed: The analysis indicates that revision requests and checks appear to be addressed.';
+                    } else {
+                        messageDiv.classList.add('validation-warning');
+                        messageDiv.textContent = '❓ Validation Inconclusive: Please review the analysis summary manually.';
                     }
                     validationContainer.appendChild(messageDiv);
                 }
@@ -3326,4 +3492,2206 @@ c. for question " any prior sales or transfers of the comparable sales for the y
         });
     </script>
 </body>
+<script>
+    // Helper functions for validation, defined globally within this script block
+    const getFieldValue = (tableRows, fieldName) => {
+        const row = Array.from(tableRows).find(r => r.querySelector('td:first-child')?.textContent.trim() === fieldName);
+        return row ? row.querySelector('td:last-child')?.textContent.trim() : null;
+    };
+
+    const addValidationMessage = (container, type, message) => {
+        const messageDiv = document.createElement('div');
+        messageDiv.classList.add('validation-message', `validation-${type}`);
+        messageDiv.innerHTML = message;
+        container.appendChild(messageDiv);
+    };
+
+    const isEmpty = (val) => {
+        if (val === null || val === undefined) return true;
+        const trimmed = String(val).trim();
+        return trimmed === '' || trimmed.toLowerCase() === '--' || trimmed.toLowerCase() === 'null' || trimmed.toLowerCase() === 'n/a';
+    };
+
+    const normalizeNumericValue = (val) => {
+        if (isEmpty(val)) return null;
+        const cleaned = String(val).replace(/[$,]/g, '').trim();
+        const num = parseFloat(cleaned);
+        return isNaN(num) ? null : num;
+    };
+
+    const normalizeText = (val) => {
+        if (isEmpty(val)) return null;
+        return String(val).replace(/,/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+    };
+
+    // Helper to check if a value is effectively zero or empty
+    const isEffectivelyZero = (value) => isEmpty(value) || normalizeNumericValue(value) === 0;
+    const isEffectivelyGreaterThanZero = (value) => !isEmpty(value) && normalizeNumericValue(value) > 0;
+
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const timerDisplay = document.getElementById('review-timer');
+        if (timerDisplay) {
+            let timerInterval;
+            // Get start time from session storage, or create it if it doesn't exist
+            let startTime = sessionStorage.getItem('reviewStartTime');
+            if (!startTime) {
+                startTime = Date.now();
+                sessionStorage.setItem('reviewStartTime', startTime);
+            }
+
+            function updateTimer() {
+                const now = Date.now();
+                const elapsed = Math.floor((now - startTime) / 1000); // total seconds
+
+                const hours = Math.floor(elapsed / 3600);
+                const minutes = Math.floor((elapsed % 3600) / 60);
+                const secs = elapsed % 60;
+
+                const formattedTime =
+                    String(hours).padStart(2, '0') + ':' +
+                    String(minutes).padStart(2, '0') + ':' +
+                    String(secs).padStart(2, '0');
+                timerDisplay.textContent = formattedTime;
+            }
+            updateTimer(); // Run once immediately
+            timerInterval = setInterval(updateTimer, 1000);
+        }
+        const links = document.querySelectorAll('.section-link');
+        const loadingOverlay = document.getElementById('loading-overlay');
+
+        links.forEach(link => {
+            link.addEventListener('click', function(event) {
+                // If the link is already disabled, do nothing.
+                if (this.classList.contains('disabled')) {
+                    event.preventDefault();
+                    return;
+                }
+                // Show the loading spinner
+                loadingOverlay.style.display = 'flex';
+
+                // "Freeze" all other links to prevent multiple clicks
+                links.forEach(otherLink => otherLink.classList.add('disabled'));
+            });
+        });
+
+        function runValidations() {
+            const validationContainer = document.getElementById('validation-container');
+            // Clear previous validation messages before running again
+            validationContainer.innerHTML = '';
+
+            const tableRows = document.querySelectorAll('tbody tr');
+
+            {% if section_key == 'subject' %}
+            // Hide FHA field if it's blank
+            tableRows.forEach(row => {
+                const fieldCell = row.querySelector('td:first-child');
+                if (fieldCell && fieldCell.textContent.trim() === 'FHA') {
+                    const valueCell = row.querySelector('td:last-child');
+                    const fhaValue = valueCell.textContent.trim();
+                    if (isEmpty(fhaValue)) {
+                        row.style.display = 'none';
+                    }
+                }
+            });
+
+            // Clear relevant session storage items at the start of a subject review
+            // This ensures a clean state for cross-section validations if the user navigates directly here.
+            // A more robust solution would be to clear these on initial file upload.
+            sessionStorage.removeItem('isPurchaseTransaction');
+            sessionStorage.removeItem('isRefinanceTransaction');
+            sessionStorage.removeItem('isPUD');
+            sessionStorage.removeItem('subjectLenderClient');
+            sessionStorage.removeItem('subjectLenderAddress');
+            sessionStorage.removeItem('subjectFullAddress');
+            sessionStorage.removeItem('subjectState');
+            sessionStorage.removeItem('isFhaCase');
+            sessionStorage.removeItem('improvementStatus');
+            sessionStorage.removeItem('reconciliationEffectiveDate');
+            sessionStorage.removeItem('salesGridIndicatedValue');
+
+            // Validation for "Purchase Transaction" requiring "Contract" section
+            let assignmentType = null;
+
+            tableRows.forEach(row => {
+                const fieldCell = row.querySelector('td:first-child');
+                const valueCell = row.querySelector('td:last-child');
+                if (fieldCell && valueCell) {
+                    const fieldName = fieldCell.textContent.trim();
+                    const value = valueCell.textContent.trim();
+
+                    if (fieldName === 'Assignment Type') {
+                        assignmentType = value;
+                    }
+                    // Capture Lender/Client for cross-validation
+                    if (fieldName === 'Lender/Client') {
+                        if (!isEmpty(value)) {
+                            sessionStorage.setItem('subjectLenderClient', value);
+                        }
+                    }
+                    // Capture State for state-specific validations
+                    if (fieldName === 'State') {
+                        if (!isEmpty(value)) {
+                            sessionStorage.setItem('subjectState', value.toUpperCase());
+                        }
+                    }
+                }
+            });
+            
+            // Capture Lender/Client Address for cross-validation
+            const lenderAddress = getFieldValue(tableRows, 'Address (Lender/Client)');
+            if (!isEmpty(lenderAddress)) {
+                sessionStorage.setItem('subjectLenderAddress', lenderAddress);
+            }
+
+
+            if (assignmentType === 'Purchase Transaction') {
+                sessionStorage.setItem('isPurchaseTransaction', 'true');
+
+                const messageDiv = document.createElement('div');
+                messageDiv.classList.add('validation-message', 'validation-warning');
+                
+                // Create a link to the 'Contract' section
+                const contractLink = document.createElement('a');
+                contractLink.href = `{% url 'extract_section' filename=filename section_name='contract' %}`;
+                contractLink.textContent = "Contract section";
+                contractLink.onclick = function() {
+                    document.getElementById('loading-overlay').style.display = 'flex';
+                };
+
+                messageDiv.innerHTML = "⚠️ Warning: Assignment Type is 'Purchase Transaction'. Please ensure the ";
+                messageDiv.appendChild(contractLink);
+                messageDiv.innerHTML += " is filled out as required.";
+                validationContainer.appendChild(messageDiv);
+            } else if (assignmentType === 'Refinance Transaction') {
+                sessionStorage.setItem('isRefinanceTransaction', 'true');
+
+                const messageDiv = document.createElement('div');
+                messageDiv.classList.add('validation-message', 'validation-warning');
+                
+                const contractLink = document.createElement('a');
+                contractLink.href = `{% url 'extract_section' filename=filename section_name='contract' %}`;
+                contractLink.textContent = "Contract section";
+                contractLink.onclick = function() {
+                    document.getElementById('loading-overlay').style.display = 'flex';
+                };
+
+                messageDiv.innerHTML = "ℹ️ Info: Assignment Type is 'Refinance Transaction'. The ";
+                messageDiv.appendChild(contractLink);
+                messageDiv.innerHTML += " should be blank.";
+                validationContainer.appendChild(messageDiv);
+            }
+
+            // New Validation: Check for address consistency reminder
+            const addressFields = ['Property Address', 'City', 'State', 'Zip Code'];
+            let addressValues = {};
+            let allAddressFieldsPresent = true;
+
+            tableRows.forEach(row => {
+                const fieldCell = row.querySelector('td:first-child');
+                const valueCell = row.querySelector('td:last-child');
+                if (fieldCell && valueCell) {
+                    const fieldName = fieldCell.textContent.trim();
+                    if (addressFields.includes(fieldName)) {
+                        const value = valueCell.textContent.trim();
+                        if (!isEmpty(value)) {
+                            addressValues[fieldName] = value;
+                        } else {
+                            allAddressFieldsPresent = false;
+                        }
+                    }
+                }
+            });
+
+            if (allAddressFieldsPresent) {
+                const fullAddress = `${addressValues['Property Address']}, ${addressValues['City']}, ${addressValues['State']} ${addressValues['Zip Code']}`;
+                sessionStorage.setItem('subjectFullAddress', fullAddress);
+                addValidationMessage(validationContainer, 'warning', `ℹ️ Consistency Check: Please verify that the address "${fullAddress}" matches the address shown in the Sales Grid, Location Map, Aerial Map, and on Subject Photos.`);
+            } else {
+                addValidationMessage(validationContainer, 'warning', `ℹ️ Consistency Check: Not all address components (Property Address, City, State, Zip Code) are present to form a full address for cross-verification.`);
+            }
+
+            // --- New Comprehensive Subject Field Validation ---
+            const alwaysRequiredFields = [
+                'Property Address', 'City', 'County', 'State', 'Zip Code', 'Borrower', 'Owner of Public Record',
+                'Legal Description', "Assessor's Parcel #", 'Tax Year', 'R.E. Taxes $', 'Neighborhood Name', 'Map Reference',
+                'Census Tract', 'Occupant', 'Special Assessments $', 'PUD',
+                'Property Rights Appraised', 'Assignment Type', 'Lender/Client', 'Address (Lender/Client)',
+                'Offered for Sale in Last 12 Months',
+                'ANSI Standard Confirmation', 'Reasonable Exposure Time Comment', 'Prior Service Certification'
+            ];
+            const missingRequiredFields = [];
+            let pudValue = '';
+            let hoaValue = '';
+            let hoaTermValue = '';
+            let offeredForSaleValue = '';
+            let offeredForSaleDetails = '';
+            let reTaxesValue = '';
+
+            tableRows.forEach(row => {
+                const fieldCell = row.querySelector('td:first-child');
+                const valueCell = row.querySelector('td:last-child');
+                if (fieldCell && valueCell) {
+                    const fieldName = fieldCell.textContent.trim();
+                    const value = valueCell.textContent.trim();
+
+                    // Check if always-required fields are empty
+                    if (alwaysRequiredFields.includes(fieldName) && isEmpty(value)) {
+                        missingRequiredFields.push(fieldName);
+                    }
+
+                    // Capture values for conditional checks
+                    if (fieldName === 'PUD') pudValue = value;
+                    if (fieldName === 'HOA $') hoaValue = value;
+                    if (fieldName === 'HOA(per year/per month)') hoaTermValue = value;
+                    if (fieldName === 'Offered for Sale in Last 12 Months') offeredForSaleValue = value;
+                    if (fieldName === 'Report data source(s) used, offering price(s), and date(s)') offeredForSaleDetails = value;
+                    if (fieldName === 'R.E. Taxes $') reTaxesValue = value;
+                }
+            });
+
+            // Display message for missing always-required fields
+            if (missingRequiredFields.length > 0) {
+                addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: The following required fields are empty: ${missingRequiredFields.join(', ')}.`);
+            }
+
+            // Validation for R.E. Taxes $
+            if (!isEmpty(reTaxesValue)) {
+                const taxAmount = normalizeNumericValue(reTaxesValue);
+                if (taxAmount !== null) {
+                    // Check if the integer part has more than 4 digits
+                    if (Math.trunc(taxAmount).toString().length > 4) {
+                        addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'R.E. Taxes $' value (${reTaxesValue}) appears to have more than 4 digits. Please verify.`);
+                    }
+                } else {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'R.E. Taxes $' value (${reTaxesValue}) is not a valid number. Please verify.`);
+                }
+            }
+
+            // Conditional Validation for PUD
+            if (normalizeText(pudValue) === 'yes') {
+                sessionStorage.setItem('isPUD', 'true');
+
+                const hoaAmount = normalizeNumericValue(hoaValue);
+                const isHoaAmountInvalid = hoaAmount === null || hoaAmount <= 0;
+                const isHoaTermMissing = isEmpty(hoaTermValue);
+
+                if (isHoaAmountInvalid || isHoaTermMissing) {
+                    let errorParts = [];
+                    if (isHoaAmountInvalid) errorParts.push("'HOA $' must be a number greater than 0");
+                    if (isHoaTermMissing) errorParts.push("'HOA(per year/per month)' must be filled");
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: PUD is 'Yes'. ${errorParts.join(' and ')}.`);
+                } else {
+                    addValidationMessage(validationContainer, 'success', `✅ Validation successful: PUD is 'Yes' and HOA details are correctly filled.`);
+                }
+
+                // Add the warning for the PUD Info section as well
+                addValidationMessage(validationContainer, 'warning', "ℹ️ Info: PUD is marked as 'Yes'. Please ensure the 'PUD Info' section is filled out completely.");
+            } else if (normalizeText(pudValue) === 'no') {
+                // If PUD is 'No', HOA fields should ideally be empty or zero
+                const hoaAmount = normalizeNumericValue(hoaValue);
+                if (hoaAmount !== null && hoaAmount > 0) {
+                    addValidationMessage(validationContainer, 'warning', `⚠️ Validation warning: PUD is 'No', but 'HOA $' has a value (${hoaValue}). It should be blank or zero.`);
+                }
+                if (!isEmpty(hoaTermValue) && normalizeText(hoaTermValue) !== 'none') {
+                    addValidationMessage(validationContainer, 'warning', `⚠️ Validation warning: PUD is 'No', but 'HOA(per year/per month)' has a value (${hoaTermValue}). It should be blank.`);
+                }
+            } else {
+                addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'PUD' field must be 'Yes' or 'No'. It is currently '${pudValue || 'blank'}'.`);
+            }
+
+            // Conditional Validation for 'Offered for Sale'
+            if (normalizeText(offeredForSaleValue) === 'yes') {
+                const detailsLower = normalizeText(offeredForSaleDetails);
+                const hasDom = detailsLower && (detailsLower.includes('dom') || detailsLower.includes('days on market'));
+                const hasListingDate = detailsLower && (detailsLower.includes('listed') || detailsLower.includes('listing date'));
+                const hasMls = detailsLower && (detailsLower.includes('mls') || detailsLower.includes('multiple listing service'));
+                const hasPrice = detailsLower && (detailsLower.includes('price') || detailsLower.includes('$'));
+
+                if (isEmpty(offeredForSaleDetails) || !hasDom || !hasListingDate || !hasMls || !hasPrice) {
+                    let errorMsg = "⚠️ Validation warning: 'Offered for Sale' is 'Yes', but the details are incomplete. ";
+                    let errorParts = [];
+                    if (isEmpty(offeredForSaleDetails)) errorParts.push("details field is empty");
+                    if (!hasDom) errorParts.push("missing 'DOM' or 'Days On Market'");
+                    if (!hasListingDate) errorParts.push("missing 'listed' or 'listing date'");
+                    if (!hasMls) errorParts.push("missing 'MLS' or 'Multiple Listing Service'");
+                    if (!hasPrice) errorParts.push("missing 'price' or '$' amount");
+                    errorMsg += `Missing: ${errorParts.join('; ')}.`;
+                    addValidationMessage(validationContainer, 'error', errorMsg);
+                } else {
+                    addValidationMessage(validationContainer, 'success', `✅ Validation successful: 'Offered for Sale' is 'Yes' and the required details (DOM, listing date, MLS, price) are present.`);
+                }
+            } else if (normalizeText(offeredForSaleValue) === 'no') {
+                if (!isEmpty(offeredForSaleDetails)) {
+                    addValidationMessage(validationContainer, 'warning', `⚠️ Validation warning: 'Offered for Sale' is 'No', but details are present (${offeredForSaleDetails}). This field should be blank.`);
+                } else {
+                    addValidationMessage(validationContainer, 'success', `✅ Validation successful: 'Offered for Sale' is 'No' and details are blank.`);
+                }
+            } else {
+                addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'Offered for Sale in Last 12 Months' must be 'Yes' or 'No'. It is currently '${offeredForSaleValue || 'blank'}'.`);
+            }
+            
+            // --- New "Unpaid OK" Lender Validation ---
+            const unpaidOkLenders = [
+                'prmg', 'paramount residential mortgage group',
+                'cardinal financial company',
+                'ice lender holdings llc',
+                'np inc', 'nqm funding, llc',
+                'east coast capital',
+                'guaranteed rate. inc',
+                'commercial lender, llc',
+                'direct lending partners',
+                'civic',
+                'cv3',
+                'united faith mortgage',
+                'arixa capital', 'crosswind financial', 'western alliance bank',
+                'rcn capital, llc',
+                'aura mortgage advisors, llc', 'blue hub capital',
+                'nations direct mortgage llc',
+                'sierra pacific mortgage company inc',
+                'champions funding llc'
+            ];
+            const lenderClient = normalizeText(getFieldValue(tableRows, 'Lender/Client'));
+            const loanNumber = getFieldValue(tableRows, 'Loan Number');
+
+            const isUnpaidOkLender = unpaidOkLenders.some(lender => lenderClient && lenderClient.includes(lender));
+            const isLoanDepotSpecialCase = lenderClient && lenderClient.includes('loandepot.com') && (loanNumber && (loanNumber.startsWith('1') || loanNumber.startsWith('4')));
+
+            if (isUnpaidOkLender || isLoanDepotSpecialCase) {
+                addValidationMessage(validationContainer, 'success', `✅ Unpaid OK lender identified.`);
+            }
+
+            // FHA Validation
+            const fhaValue = getFieldValue(tableRows, 'FHA');
+            if (!isEmpty(fhaValue)) {
+                sessionStorage.setItem('isFhaCase', 'true');
+                
+                // Create a link to the custom analysis section that carries the FHA flag
+                const customAnalysisLink = document.createElement('a');
+                // Append ?fha=true to the URL
+                customAnalysisLink.href = `{% url 'extract_section' filename=filename section_name='custom_analysis' %}?fha=true`;
+                customAnalysisLink.textContent = 'Custom Analysis section';
+                customAnalysisLink.onclick = function() {
+                    document.getElementById('loading-overlay').style.display = 'flex';
+                };
+
+                addValidationMessage(validationContainer, 'warning', `ℹ️ FHA case detected. Please check FHA instructions in the ${customAnalysisLink.outerHTML}.`);
+            }
+
+            // --- New Rental Form (1007) Detection ---
+            {% if is_rental_form %}
+            const rentalCustomAnalysisLink = document.createElement('a');
+            rentalCustomAnalysisLink.href = `{% url 'extract_section' filename=filename section_name='custom_analysis' %}`;
+            rentalCustomAnalysisLink.textContent = 'Custom Analysis section';
+            rentalCustomAnalysisLink.onclick = function() {
+                document.getElementById('loading-overlay').style.display = 'flex';
+            };
+            addValidationMessage(validationContainer, 'warning', `ℹ️ Rental form detected. Please check rental form instructions in the ${rentalCustomAnalysisLink.outerHTML}.`);
+            {% endif %}
+            {% endif %}
+
+            {% if section_key == 'base_info' %}
+            // --- Validation for Base Info section ---
+            const appraisalFormType = getFieldValue(tableRows, 'APPRAISAL FORM TYPE (1004/1025/1004D/1073)');
+            const additionalForm = getFieldValue(tableRows, 'Additional Form (1007/216/Rental/STR)');
+            const ansiValue = normalizeText(getFieldValue(tableRows, 'ANSI Standard Confirmation'));
+            const exposureCommentValue = getFieldValue(tableRows, 'Reasonable Exposure Time Comment');
+            const priorServiceValue = normalizeText(getFieldValue(tableRows, 'Prior Service Certification'));
+
+            // 1. Validate APPRAISAL FORM TYPE
+            if (isEmpty(appraisalFormType)) {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'APPRAISAL FORM TYPE' cannot be blank.");
+            } else {
+                const validFormTypes = ['1004', '1025', '1004D', '1073'];
+                if (!validFormTypes.some(type => normalizeText(appraisalFormType).includes(type))) {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'APPRAISAL FORM TYPE' ('${appraisalFormType}') is not a recognized type (e.g., 1004, 1025, 1004D, 1073).`);
+                } else {
+                    addValidationMessage(validationContainer, 'success', `✅ Validation successful: 'APPRAISAL FORM TYPE' is '${appraisalFormType}'.`);
+                }
+            }
+
+            // 2. Validate Additional Form
+            if (isEmpty(additionalForm)) {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Additional Form' cannot be blank. Should state 'None' if not applicable.");
+            } else {
+                const validAdditionalForms = ['1007', '216', 'rental', 'str', 'none'];
+                if (!validAdditionalForms.some(type => normalizeText(additionalForm).includes(type))) {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'Additional Form' ('${additionalForm}') is not a recognized type (e.g., 1007, 216, Rental, STR, None).`);
+                } else {
+                    addValidationMessage(validationContainer, 'success', `✅ Validation successful: 'Additional Form' is '${additionalForm}'.`);
+                }
+            }
+
+            // Validation for ANSI Standard Confirmation
+            if (ansiValue === 'did' || ansiValue === 'did not') {
+                addValidationMessage(validationContainer, 'success', `✅ Validation successful: 'ANSI Standard Confirmation' is correctly marked as '${ansiValue}'.`);
+            } else {
+                addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'ANSI Standard Confirmation' must be 'did' or 'did not'. It is currently '${ansiValue || 'blank'}'.`);
+            }
+
+            // Validation for Reasonable Exposure Time Comment
+            if (!isEmpty(exposureCommentValue)) {
+                addValidationMessage(validationContainer, 'success', `✅ Validation successful: 'Reasonable Exposure Time Comment' is present.`);
+            } else {
+                addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'Reasonable Exposure Time Comment' cannot be blank.`);
+            }
+
+            // Validation for Prior Service Certification
+            if (priorServiceValue === 'have' || priorServiceValue === 'have not') {
+                addValidationMessage(validationContainer, 'success', `✅ Validation successful: 'Prior Service Certification' is correctly marked as '${priorServiceValue}'.`);
+            } else {
+                addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'Prior Service Certification' must be 'have' or 'have not'. It is currently '${priorServiceValue || 'blank'}'.`);
+            }
+            {% endif %}
+            {% if section_key == 'contract' %}
+            // Validation for 'Refinance Transaction' requiring a blank 'Contract' section
+            if (sessionStorage.getItem('isRefinanceTransaction') === 'true') {
+                let allFieldsBlank = true;
+                const nonEmptyFields = [];
+
+                tableRows.forEach(row => {
+                    const fieldCell = row.querySelector('td:first-child');
+                    const valueCell = row.querySelector('td:last-child');
+                    const value = valueCell.textContent.trim();
+
+                    if (!isEmpty(value)) {
+                        allFieldsBlank = false;
+                        nonEmptyFields.push(fieldCell.textContent.trim());
+                    }
+                });
+
+                if (allFieldsBlank) {
+                    addValidationMessage(validationContainer, 'success', '✅ Validation successful: Contract section is blank as required for a Refinance Transaction.');
+                } else {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: For a Refinance Transaction, the Contract section should be blank. The following fields have values: ${nonEmptyFields.join(', ')}. Please clear them.`);
+                }
+            }
+            // Validation for contract analysis based on 'isPurchaseTransaction' flag
+            if (sessionStorage.getItem('isPurchaseTransaction') === 'true') {
+                const contractAnalysisField = 'I _____ analyze the contract for sale for the subject purchase transaction.';
+                let analysisValue = null;
+
+                tableRows.forEach(row => {
+                    const fieldCell = row.querySelector('td:first-child');
+                    if (fieldCell && fieldCell.textContent.trim().startsWith(contractAnalysisField)) {
+                        const valueCell = row.querySelector('td:last-child');
+                        analysisValue = valueCell.textContent.trim();
+                    }
+                });
+
+                if (normalizeText(analysisValue) === 'did') {
+                    addValidationMessage(validationContainer, 'success', '✅ Validation successful: Contract analysis is marked as "did", which is required for a Purchase Transaction.');
+                } else {
+                    addValidationMessage(validationContainer, 'error', '⚠️ Validation warning: For a Purchase Transaction, the contract analysis must be "did", not "did not". The current value is not valid.');
+                }
+
+                // New validation: Check if all fields are filled for a Purchase Transaction
+                const missingFields = [];
+                let financialAssistanceValue = null;
+
+                // First pass to get the value of the financial assistance question
+                tableRows.forEach(row => {
+                    const fieldCell = row.querySelector('td:first-child');
+                    const valueCell = row.querySelector('td:last-child');
+                    if (fieldCell && valueCell) {
+                        const fieldName = fieldCell.textContent.trim();
+                        if (fieldName.includes('Is there any financial assistance')) {
+                            financialAssistanceValue = normalizeText(valueCell.textContent.trim());
+                        }
+                    }
+                });
+
+                tableRows.forEach(row => {
+                    const fieldCell = row.querySelector('td:first-child');
+                    const valueCell = row.querySelector('td:last-child');
+                    const fieldName = fieldCell.textContent.trim();
+                    const value = valueCell.textContent.trim();
+                    const isFinancialAssistanceDetailsField = fieldName.includes('If Yes, report the total dollar amount');
+
+                    // The details field is only required if financial assistance is 'yes'.
+                    if (isFinancialAssistanceDetailsField && financialAssistanceValue !== 'yes') {
+                        // Skip this field, it's not required to be filled if financial assistance is not 'yes'.
+                    } else if (isEmpty(value)) {
+                        missingFields.push(fieldName);
+                    }
+                });
+
+                if (missingFields.length > 0) {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: For a Purchase Transaction, all Contract fields must be filled. The following fields are empty: ${missingFields.join(', ')}. Please fill them.`);
+                } else {
+                    addValidationMessage(validationContainer, 'success', '✅ Validation successful: All fields in the Contract section are filled as required for a Purchase Transaction.');
+                }
+            }
+
+            // New validation: If contract analysis is 'did', all fields must be filled.
+            if (sessionStorage.getItem('isPurchaseTransaction') !== 'true') { // Only run if not already covered by purchase validation
+                const contractAnalysisField = 'I _____ analyze the contract for sale for the subject purchase transaction.';
+                let analysisValue = null;
+                tableRows.forEach(row => {
+                    const fieldCell = row.querySelector('td:first-child');
+                    if (fieldCell && fieldCell.textContent.trim().startsWith(contractAnalysisField)) {
+                        const valueCell = row.querySelector('td:last-child');
+                        analysisValue = normalizeText(valueCell.textContent.trim());
+                    }
+                });
+
+                if (analysisValue === 'did') {
+                    const missingFields = [];
+                    tableRows.forEach(row => {
+                        const fieldCell = row.querySelector('td:first-child');
+                        const valueCell = row.querySelector('td:last-child');
+                        const value = valueCell.textContent.trim();
+
+                        if (isEmpty(value)) {
+                            missingFields.push(fieldCell.textContent.trim());
+                        }
+                    });
+
+                    if (missingFields.length > 0) {
+                        addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: Since contract analysis was performed ('did'), all fields in this section must be filled. The following are empty: ${missingFields.join(', ')}. Please fill them.`);
+                    }
+                }
+            }
+            // New validation for financial assistance
+            let financialAssistanceValue = '';
+            let financialAssistanceDetailsValue = null;
+            const financialAssistanceField = 'Is there any financial assistance (loan charges, sale concessions, gift or downpay i etc.) to be paid by any party on behalf of the borrower?(Yes/No)';
+            const financialAssistanceDetailsField = 'If Yes, report the total dollar amount and describe the items to be paid.';
+
+            tableRows.forEach(row => {
+                const fieldCell = row.querySelector('td:first-child');
+                const valueCell = row.querySelector('td:last-child');
+                if (fieldCell && valueCell) {
+                    const fieldName = fieldCell.textContent.trim();
+                    const value = valueCell.textContent.trim();
+
+                    if (fieldName.includes('Is there any financial assistance')) {
+                        financialAssistanceValue = normalizeText(value);
+                    }
+                    if (fieldName.includes('If Yes, report the total dollar amount')) {
+                        financialAssistanceDetailsValue = value;
+                    }
+                }
+            });
+
+            if (financialAssistanceValue === 'yes') {
+                if (isEmpty(financialAssistanceDetailsValue)) {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: Financial assistance is marked 'Yes', but the description of the dollar amount and items is missing. Please provide details.`);
+                } else {
+                    // Check for presence of a dollar amount (e.g., $1,234.56 or 1234.56)
+                    const hasDollarAmount = /\$\s*\d{1,3}(?:,\d{3})*(?:\.\d{2})?|\d{1,3}(?:,\d{3})*(?:\.\d{2})?/.test(financialAssistanceDetailsValue);
+                    // Check for some descriptive text (more than just a number or simple symbol)
+                    const hasDescription = financialAssistanceDetailsValue.replace(/[\d\s$,.\-]/g, '').length > 5;
+
+                    if (hasDollarAmount && hasDescription) {
+                        addValidationMessage(validationContainer, 'success', `✅ Validation successful: Financial assistance is marked 'Yes' and the details field contains both a dollar amount and a description.`);
+                    } else if (!hasDollarAmount && !hasDescription) {
+                        addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: Financial assistance is marked 'Yes', but the details field appears to be missing both a dollar amount and a description of items. Please provide both.`);
+                    } else if (!hasDollarAmount) {
+                        addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: Financial assistance is marked 'Yes', but the details field appears to be missing a dollar amount. Please include the amount.`);
+                    } else { // !hasDescription
+                        addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: Financial assistance is marked 'Yes', but the details field appears to be missing a description of items. Please describe the items.`);
+                    }
+                }
+            } else if (financialAssistanceValue === 'no') {
+                // Allow "$0;;" as a valid "empty" value when assistance is 'No'.
+                if (!isEmpty(financialAssistanceDetailsValue) && financialAssistanceDetailsValue !== '$0;;') {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: Financial assistance is marked 'No', but the details field contains information. It should be blank.`);
+                } else {
+                    addValidationMessage(validationContainer, 'success', `✅ Validation successful: Financial assistance is marked 'No' and the details field is blank.`);
+                }
+            } else { // financialAssistanceValue is blank or invalid
+                addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'Is there any financial assistance...' field must be marked 'Yes' or 'No'. It is currently blank. Please select an option.`);
+            }
+            {% endif %}
+            
+            {% if section_key == 'neighborhood' %}
+            // Validation for Neighborhood section percentages
+            const fieldsToSum = ['One-Unit', '2-4 Unit', 'Multi-Family', 'Commercial', 'Other'];
+            let totalPercentage = 0;
+            let fieldsFoundCount = 0;
+
+            const missingFields = [];
+            let otherPercentage = 0;
+            let otherDescription = null;
+
+            tableRows.forEach(row => {
+                const fieldCell = row.querySelector('td:first-child');
+                const valueCell = row.querySelector('td:last-child');
+
+                if (fieldCell && valueCell) {
+                    const fieldName = fieldCell.textContent.trim();
+                    const valueText = valueCell.textContent.trim();
+
+                    // Check if any field is empty, but exclude 'Present Land Use Other Description' for now
+                    if (fieldName !== 'Present Land Use Other Description') {
+                        if (isEmpty(valueText)) {
+                            missingFields.push(fieldName);
+                        }
+                    }
+
+                    if (fieldName === 'Other') {
+                        otherPercentage = normalizeNumericValue(valueText) || 0;
+                    } else if (fieldName === 'Present Land Use Other Description') {
+                        otherDescription = valueText;
+                    }
+
+                    if (fieldsToSum.includes(fieldName)) {
+                        fieldsFoundCount++;
+                        const numericValue = normalizeNumericValue(valueText);
+                        if (numericValue !== null) {
+                            totalPercentage += numericValue;
+                        }
+                    }
+                }
+            });
+
+            if (fieldsFoundCount > 0) {
+                const isTotal100 = Math.abs(totalPercentage - 100) < 0.01;
+                const isOtherDescriptionMissing = isEmpty(otherDescription);
+
+                if (isTotal100) {
+                    if (otherPercentage > 0 && isOtherDescriptionMissing) {
+                        addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: The sum is 100%, but 'Other' is ${otherPercentage}% and its description is missing. Please provide a comment.`);
+                    } else {
+                        addValidationMessage(validationContainer, 'success', `✅ Validation successful: The sum of housing unit types is ${totalPercentage}%.`);
+                    }
+                } else if (fieldsFoundCount === 0) {
+                    // Do nothing if no percentage fields were found
+                } else {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: The sum of housing unit types is ${totalPercentage}%, which is not 100%. Please correct the percentages.`);
+                }
+            }
+
+            // Conditionally check if 'Present Land Use Other Description' is required
+            if (otherPercentage > 0 && isEmpty(otherDescription)) {
+                missingFields.push('Present Land Use Other Description');
+            }
+
+            // Display message for any missing fields in the section
+            if (missingFields.length > 0) {
+                addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: The following required fields are empty: ${missingFields.join(', ')}. Please fill them.`);
+            }
+
+            // Specific validation for Neighborhood Boundaries
+            tableRows.forEach(row => {
+                const fieldCell = row.querySelector('td:first-child');
+                if (fieldCell && fieldCell.textContent.trim() === 'Neighborhood Boundaries') {
+                    const valueCell = row.querySelector('td:last-child');
+                    const valueText = normalizeText(valueCell.textContent.trim());
+                    
+                    const missingDirections = [];
+                    if (!valueText || !valueText.includes('north')) missingDirections.push('North');
+                    if (!valueText || !valueText.includes('south')) missingDirections.push('South');
+                    if (!valueText || !valueText.includes('east')) missingDirections.push('East');
+                    if (!valueText || !valueText.includes('west')) missingDirections.push('West');
+
+                    if (!isEmpty(valueText) && missingDirections.length > 0) {
+                        addValidationMessage(validationContainer, 'error', `⚠️ Validation error: The 'Neighborhood Boundaries' description is missing directional words: ${missingDirections.join(', ')}. Please ensure it is sufficiently detailed (e.g., "North: Main St, South: Oak Ave, East: RR Tracks, West: City Park").`);
+                    } else if (!isEmpty(valueText) && valueText.length < 50) {
+                        addValidationMessage(validationContainer, 'warning', `⚠️ Validation warning: The 'Neighborhood Boundaries' description seems short. Please ensure it is sufficiently detailed.`);
+                    } else if (isEmpty(valueText)) {
+                        addValidationMessage(validationContainer, 'error', `⚠️ Validation error: 'Neighborhood Boundaries' cannot be blank. Please provide a detailed description.`);
+                    }
+                }
+            });
+            {% endif %}
+
+            {% if section_key == 'site' %}
+            // --- Comprehensive Site Section Validation ---
+            const requiredFields = ['Dimensions', 'Area', 'Shape', 'View', 'Specific Zoning Classification', 'Zoning Description'];
+            const missingRequiredFields = [];
+
+            tableRows.forEach(row => {
+                const fieldCell = row.querySelector('td:first-child');
+                const valueCell = row.querySelector('td:last-child');
+                if (fieldCell && valueCell) {
+                    const fieldName = fieldCell.textContent.trim();
+                    const value = valueCell.textContent.trim();
+                    const valueLower = normalizeText(value);
+
+                    // 1. Check for blank required fields
+                    if (requiredFields.includes(fieldName) && isEmpty(value)) {
+                        missingRequiredFields.push(fieldName);
+                    }
+
+                    // 2. Area validation
+                    if (fieldName === 'Area' && !isEmpty(value)) {
+                        const areaValue = normalizeNumericValue(value);
+                        if (areaValue !== null && areaValue > 43500) {
+                            if (!valueLower.includes('ac') && !valueLower.includes('acres')) {
+                                addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: Area is greater than 43,500 sq ft. The unit should be in Acres (AC). Current value: ${value}.`);
+                            }
+                        } else if (areaValue === null) {
+                            addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'Area' value (${value}) is not a valid number. Please verify.`);
+                        }
+                    }
+
+                    // 3. Zoning Description validation
+                    if (fieldName === 'Zoning Description' && valueLower && valueLower.includes('agr')) {
+                        addValidationMessage(validationContainer, 'error', `<strong>⚠️ CRITICAL WARNING: Zoning Description contains 'Agriculture'/'agr'. This is not acceptable.</strong>`);
+                    }
+                    
+                    // 4. Zoning Compliance validation
+                    if (fieldName === 'Zoning Compliance') {
+                        const complianceValue = value;
+                        const commentValue = getFieldValue(tableRows, 'Zoning Compliance Comment');
+                        const isCommentEmpty = isEmpty(commentValue);
+
+                        if (complianceValue === 'Legal') {
+                            addValidationMessage(validationContainer, 'success', '✅ Zoning Compliance is "Legal".');
+                        } else if (['Legal Nonconforming', 'No Zoning'].includes(complianceValue)) {
+                            if (isCommentEmpty) {
+                                addValidationMessage(validationContainer, 'warning', `⚠️ Warning: Zoning Compliance is "${complianceValue}". Please ensure a comment/explanation is provided in the report.`);
+                            } else {
+                                addValidationMessage(validationContainer, 'success', `✅ Zoning Compliance is "${complianceValue}" and a comment has been provided.`);
+                            }
+                        } else if (complianceValue === 'Illegal') {
+                            addValidationMessage(validationContainer, 'error', `<strong>⚠️ CRITICAL WARNING: Zoning Compliance is "Illegal". Please stop review and freeze further modules.</strong>`);
+                            document.querySelectorAll('.sidebar a:not(.active)').forEach(link => {
+                                link.style.pointerEvents = 'none';
+                                link.style.opacity = '0.5';
+                                link.title = 'Navigation disabled due to critical error.';
+                            });
+                        } else if (isEmpty(complianceValue)) {
+                            addValidationMessage(validationContainer, 'error', `⚠️ Validation error: 'Zoning Compliance' cannot be blank. Please select an option.`);
+                        }
+                    }
+
+                    // 5. Highest and Best Use validation
+                    if (fieldName === 'Is the highest and best use of subject property as improved (or as proposed per plans and specifications) the present use?') {
+                        if (valueLower === 'yes') {
+                            addValidationMessage(validationContainer, 'success', `✅ Validation successful: Highest and Best Use is 'Yes'.`);
+                        } else if (valueLower === 'no') {
+                            addValidationMessage(validationContainer, 'error', `<strong>⚠️ CRITICAL WARNING: Highest and Best Use is 'No'. This is not acceptable.</strong>`);
+                        } else if (isEmpty(value)) {
+                            addValidationMessage(validationContainer, 'error', `⚠️ Validation error: Highest and Best Use must be marked 'Yes' or 'No'. It is currently blank.`);
+                        }
+                    }
+
+                    // 6. Utilities validation
+                    const standardUtilityFields = ['Electricity', 'Gas', 'Water', 'Sanitary Sewer'];
+                    const streetAlleyFields = ['Street', 'Alley'];
+
+                    if (standardUtilityFields.includes(fieldName)) {
+                        if (valueLower.includes('public') && valueLower.includes('private')) {
+                            addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: Utility '${fieldName}' cannot be both Public and Private. Please correct.`);
+                        } else if ((valueLower.includes('private') || valueLower.includes('other')) && value.split(/[\s/]/).length < 2) {
+                            addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: Utility '${fieldName}' is marked 'Private' or 'Other' but is missing a required comment (e.g., 'Private-Well'). Please provide details.`);
+                        } else if (isEmpty(value)) {
+                            addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: Utility '${fieldName}' is blank. A selection (e.g., Public, Private, None) is required.`);
+                        }
+                    } else if (streetAlleyFields.includes(fieldName)) {
+                        const validPrefixes = ['public', 'private'];
+                        let isCorrectPrefix = false;
+                        for (const prefix of validPrefixes) {
+                            if (valueLower.startsWith(prefix)) {
+                                isCorrectPrefix = true;
+                                break;
+                            }
+                        }
+
+                        if (isEmpty(value)) {
+                            addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: '${fieldName}' is blank. It must be 'Public' or 'Private'.`);
+                        } else if (!isCorrectPrefix && valueLower !== 'none') {
+                            addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: '${fieldName}' must start with 'Public' or 'Private' (e.g., 'Public/Asphalt', 'Private/Dirt'). Current value: '${value}'.`);
+                        }
+                    }
+
+                    // 7. Utilities/Off-site improvements typical for market area
+                    if (fieldName === 'Are the utilities and off-site improvements typical for the market area?') {
+                        if (valueLower === 'yes') {
+                            addValidationMessage(validationContainer, 'success', `✅ Validation successful: Utilities and off-site improvements are typical for the market area.`);
+                        } else if (valueLower === 'no') {
+                            addValidationMessage(validationContainer, 'warning', `⚠️ Warning: Utilities/improvements are marked 'No' (not typical). Please verify an explanation is provided in the report.`);
+                        } else if (isEmpty(value)) {
+                            addValidationMessage(validationContainer, 'error', `⚠️ Validation error: 'Utilities typical for market area' must be marked 'Yes' or 'No'. It is currently blank.`);
+                        }
+                    }
+
+                    // 8. Adverse site conditions
+                    if (fieldName === 'Are there any adverse site conditions or external factors (easements, encroachments, environmental conditions, land uses, etc.)(Yes/No)?') {
+                        if (valueLower === 'no') {
+                            addValidationMessage(validationContainer, 'success', `✅ Validation successful: No adverse site conditions reported.`);
+                        } else if (valueLower === 'yes') {
+                            addValidationMessage(validationContainer, 'warning', `⚠️ Warning: Adverse site conditions are marked 'Yes'. Please verify the description is provided and acceptable.`);
+                        } else if (isEmpty(value)) {
+                            addValidationMessage(validationContainer, 'error', `⚠️ Validation error: 'Adverse site conditions' must be marked 'Yes' or 'No'. It is currently blank.`);
+                        }
+                    }
+                }
+            });
+
+            // Display message for any missing required fields
+            if (missingRequiredFields.length > 0) {
+                addValidationMessage(validationContainer, 'error', `⚠️ Validation error: The following required fields are empty: ${missingRequiredFields.join(', ')}. Please fill them.`);
+            }
+
+            // --- FEMA Validation ---
+            let femaHazardAreaValue = normalizeText(getFieldValue(tableRows, 'FEMA Special Flood Hazard Area'));
+            let femaFloodZoneValue = normalizeText(getFieldValue(tableRows, 'FEMA Flood Zone'));
+            
+            if (!isEmpty(femaHazardAreaValue) && !isEmpty(femaFloodZoneValue)) {
+                let isValid = false;
+
+                if (femaHazardAreaValue === 'yes' && (femaFloodZoneValue === 'a' || femaFloodZoneValue === 'ae')) {
+                    isValid = true; 
+                } else if (femaHazardAreaValue === 'no' && (femaFloodZoneValue === 'x' || femaFloodZoneValue === 'x500')) {
+                    isValid = true;
+                }
+
+                if (isValid) {
+                    addValidationMessage(validationContainer, 'success', `✅ Validation successful: FEMA Flood Zone '${femaFloodZoneValue.toUpperCase()}' is consistent with Special Flood Hazard Area being '${femaHazardAreaValue}'.`);
+                } else { 
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: FEMA Flood Zone '${femaFloodZoneValue.toUpperCase()}' is inconsistent. It should be 'A' or 'AE' if Hazard Area is 'Yes', or 'X' or 'X500' if Hazard Area is 'No'. Please correct.`);
+                }
+            } else if (!isEmpty(femaHazardAreaValue) || !isEmpty(femaFloodZoneValue)) {
+                addValidationMessage(validationContainer, 'warning', `⚠️ Validation warning: Both 'FEMA Special Flood Hazard Area' and 'FEMA Flood Zone' must be filled for consistency check.`);
+            }
+            {% endif %}
+            {% if section_key == 'improvements' %}
+            // --- Clear session storage for cross-page validation ---
+            sessionStorage.removeItem('improvementStatus');
+
+            // --- General Description Validation ---
+            const unitValue = getFieldValue(tableRows, 'Units');
+            if (isEmpty(unitValue)) {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Units' field should not be blank.");
+            }
+
+            const typeValue = getFieldValue(tableRows, 'Type');
+            if (typeValue && normalizeText(typeValue).includes('one with accessory unit')) {
+                addValidationMessage(validationContainer, 'warning', "ℹ️ Info: 'One with Accessory Unit' is selected. Please verify that the ADU is described and shown in the sales grid, photos, and building sketch.");
+            }
+            if (isEmpty(typeValue)) {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Type' field should not be blank. One option must be selected.");
+            }
+
+            const storiesValue = getFieldValue(tableRows, '# of Stories');
+            if (isEmpty(storiesValue) || normalizeNumericValue(storiesValue) === 0) {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: '# of Stories' must be a non-zero number and cannot be blank.");
+            }
+
+            const statusValue = getFieldValue(tableRows, 'Existing/Proposed/Under Const.');
+            if (!isEmpty(statusValue)) {
+                const statuses = statusValue.split(/[/,]/).map(s => s.trim()).filter(Boolean);
+                if (statuses.length > 1) {
+                    addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: Only one option should be selected for 'Existing/Proposed/Under Const.'.");
+                } else if (statuses.length === 1) {
+                    sessionStorage.setItem('improvementStatus', normalizeText(statuses[0]));
+                    addValidationMessage(validationContainer, 'warning', `ℹ️ Info: Improvement status is '${statuses[0]}'. This will be checked against the 'Reconciliation' section.`);
+                }
+            } else {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Existing/Proposed/Under Const.' cannot be blank.");
+            }
+
+            const designValue = getFieldValue(tableRows, 'Design (Style)');
+            if (isEmpty(designValue) || normalizeNumericValue(designValue) === 0) {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Design (Style)' cannot be blank or zero.");
+            }
+
+            if (isEmpty(getFieldValue(tableRows, 'Year Built'))) addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Year Built' cannot be blank.");
+            if (isEmpty(getFieldValue(tableRows, 'Effective Age (Yrs)'))) addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Effective Age (Yrs)' cannot be blank.");
+
+            // --- Foundation Validation ---
+            const foundationTypeValue = getFieldValue(tableRows, 'Foundation Type');
+            const basementAreaValue = getFieldValue(tableRows, 'Basement Area sq.ft.');
+            const basementFinishValue = getFieldValue(tableRows, 'Basement Finish');
+
+            if (!isEmpty(foundationTypeValue)) {
+                const foundationTypeLower = normalizeText(foundationTypeValue);
+                if (foundationTypeLower.includes('concrete slab') && foundationTypeLower.includes('crawl space')) {
+                    addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: Foundation Type cannot be both 'Concrete Slab' and 'Crawl Space'. Please correct.");
+                }
+                if (foundationTypeLower.includes('full basement') && foundationTypeLower.includes('partial basement')) {
+                    addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: Foundation Type cannot be both 'Full Basement' and 'Partial Basement'. Please correct.");
+                }
+
+                if (foundationTypeLower.includes('concrete slab') || foundationTypeLower.includes('crawl space')) {
+                    // If Foundation Type is Concrete Slab/Crawl Space, Basement Area and Finish should be 0 or empty
+                    if (!isEffectivelyZero(basementAreaValue)) {
+                        addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: Foundation Type is '${foundationTypeValue}'. 'Basement Area sq.ft.' should be 0 or blank, but is '${basementAreaValue}'.`);
+                    }
+                    if (!isEffectivelyZero(basementFinishValue)) {
+                        addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: Foundation Type is '${foundationTypeValue}'. 'Basement Finish' should be 0 or blank, but is '${basementFinishValue}'.`);
+                    }
+                } else {
+                    // Otherwise (any other foundation type), Basement Area and Finish should be > 0 or non-empty
+                    if (!isEffectivelyGreaterThanZero(basementAreaValue)) {
+                        addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: Foundation Type is '${foundationTypeValue}'. 'Basement Area sq.ft.' should be greater than 0 or non-empty, but is '${basementAreaValue}'.`);
+                    }
+                    if (!isEffectivelyGreaterThanZero(basementFinishValue)) {
+                        addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: Foundation Type is '${foundationTypeValue}'. 'Basement Finish' should be greater than 0 or non-empty, but is '${basementFinishValue}'.`);
+                    }
+                }
+            } else {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Foundation Type' cannot be blank.");
+            }
+
+            const evidenceValue = getFieldValue(tableRows, 'Evidence of');
+            if (!isEmpty(evidenceValue) && normalizeText(evidenceValue) !== 'none') {
+                addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'Evidence of' should be unchecked (None). It is currently marked as '${evidenceValue}'. Please verify with basement photos.`);
+            }
+
+            // --- Material/Condition Validation (Exterior & Interior) ---
+            const materialConditionFields = [
+                'Exterior Walls (Material/Condition)', 'Roof Surface (Material/Condition)', 'Gutters & Downspouts (Material/Condition)',
+                'Window Type (Material/Condition)', 'Floors (Material/Condition)', 'Walls (Material/Condition)', 'Trim/Finish (Material/Condition)',
+                'Bath Floor (Material/Condition)', 'Bath Wainscot (Material/Condition)'
+            ];
+            const validLongConditions = ['good', 'average', 'poor', 'fair'];
+            const validShortConditions = ['a', 'a+', 'b', 'b+', 'c', 'c+', 'd', 'd+', 'avg', 'ag', 'gd', 'pr', 'fr'];
+            const allValidConditions = [...validLongConditions, ...validShortConditions];
+            materialConditionFields.forEach(field => {
+                const interiorFields = ['Floors (Material/Condition)', 'Walls (Material/Condition)', 'Trim/Finish (Material/Condition)'];
+                const value = getFieldValue(tableRows, field);
+                if (isEmpty(value)) {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: '${field}' cannot be blank.`);
+                } else if (!value.includes('/')) {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: '${field}' is missing either Material or Condition. It should be in 'Material/Condition' format.`);
+                } else {
+                    const parts = value.split('/');
+                    let condition;
+                    // For interior fields, the condition is the last part, even with multiple slashes (e.g., Material/Finish/Condition)
+                    if (interiorFields.includes(field)) {
+                        condition = normalizeText(parts[parts.length - 1]);
+                    } else {
+                        condition = normalizeText(parts[1]);
+                    }
+
+                    if (!condition || !allValidConditions.includes(condition)) {
+                         addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: The condition for '${field}' ('${parts[1]?.trim()}') is not valid. It must be one of: Good, Average, Poor, Fair, or a short form like A, B+, C, avg, gd, pr, fr.`);
+                    }
+                }
+            });
+
+            // --- Attic, Heating, Cooling ---
+            const atticValue = getFieldValue(tableRows, 'Attic');
+            if (!isEmpty(atticValue) && normalizeText(attricValue) !== 'none') {
+                addValidationMessage(validationContainer, 'warning', `ℹ️ Info: 'Attic' is marked as '${atticValue}'. Please verify photos and sketch.`);
+            }
+
+            const heatingValue = getFieldValue(tableRows, 'Heating Type');
+            if (!isEmpty(heatingValue) && normalizeText(heatingValue).includes('other') && heatingValue.split(/[\s/]/).length < 2) {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Heating Type' is marked 'Other' but is missing a description.");
+            } else if (isEmpty(heatingValue)) {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Heating Type' cannot be blank.");
+            }
+
+            const fuelValue = getFieldValue(tableRows, 'Fuel');
+            if (!isEmpty(fuelValue)) {
+                const validFuels = ['gas', 'oil', 'electric'];
+                const fuelParts = normalizeText(fuelValue).split(/[\s,\/]+/);
+                
+                const allPartsValid = fuelParts.every(part => validFuels.includes(part.trim()));
+
+                if (!allPartsValid) {
+                    addValidationMessage(validationContainer, 'warning', `⚠️ Validation warning: 'Fuel' is '${fuelValue}'. It contains an atypical type. It should typically be a combination of 'Gas', 'Oil', or 'Electric'. Please verify.`);
+                }
+            } else {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Fuel' cannot be blank.");
+            }
+
+            const coolingValue = getFieldValue(tableRows, 'Cooling Type');
+            if (!isEmpty(coolingValue) && normalizeText(coolingValue).includes('other') && coolingValue.split(/[\s/]/).length < 2) {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Cooling Type' is marked 'Other' but is missing a description.");
+            } else if (isEmpty(coolingValue)) {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Cooling Type' cannot be blank.");
+            }
+
+            // --- Car Storage ---
+            const carStorageValue = getFieldValue(tableRows, 'Car Storage');
+            if (!isEmpty(carStorageValue)) {
+                const carStorageLower = normalizeText(carStorageValue);
+                const drivewayFields = ['Driveway # of Cars', 'Driveway Surface'];
+                const garageFields = ['Garage # of Cars', 'Garage (Att./Det./Built-in)'];
+                const carportFields = ['Carport # of Cars'];
+
+                if (carStorageLower.includes('none')) {
+                    // If 'None' is checked, all other car storage fields should be blank.
+                    const allOtherFields = [...drivewayFields, ...garageFields, ...carportFields];
+                    allOtherFields.forEach(field => {
+                        if (!isEmpty(getFieldValue(tableRows, field))) {
+                            addValidationMessage(validationContainer, 'error', `⚠️ Validation Mismatch: 'Car Storage' is marked 'None', but '${field}' has a value. It should be blank.`);
+                        }
+                    });
+                } else {
+                    // If 'None' is NOT checked, validate the selected options.
+                    // Check Driveway
+                    if (carStorageLower.includes('driveway') && isEmpty(getFieldValue(tableRows, 'Driveway # of Cars'))) {
+                        addValidationMessage(validationContainer, 'error', "⚠️ Validation Mismatch: 'Car Storage' includes 'Driveway', but 'Driveway # of Cars' is blank or zero.");
+                    } else if (!carStorageLower.includes('driveway') && (!isEmpty(getFieldValue(tableRows, 'Driveway # of Cars')) || !isEmpty(getFieldValue(tableRows, 'Driveway Surface')))) {
+                        addValidationMessage(validationContainer, 'error', "⚠️ Validation Mismatch: 'Driveway' is not selected in 'Car Storage', but its related fields have values.");
+                    }
+
+                    // Check Garage
+                    if (carStorageLower.includes('garage')) {
+                        if (isEmpty(getFieldValue(tableRows, 'Garage # of Cars'))) {
+                            addValidationMessage(validationContainer, 'error', "⚠️ Validation Mismatch: 'Car Storage' includes 'Garage', but 'Garage # of Cars' is blank or zero.");
+                        }
+                        if (isEmpty(getFieldValue(tableRows, 'Garage (Att./Det./Built-in)'))) {
+                            addValidationMessage(validationContainer, 'error', "⚠️ Validation Mismatch: 'Car Storage' includes 'Garage', but the type (Att./Det./Built-in) is not selected.");
+                        }
+                    } else if (!carStorageLower.includes('garage') && (!isEmpty(getFieldValue(tableRows, 'Garage # of Cars')) || !isEmpty(getFieldValue(tableRows, 'Garage (Att./Det./Built-in)')))) {
+                        addValidationMessage(validationContainer, 'error', "⚠️ Validation Mismatch: 'Garage' is not selected in 'Car Storage', but its related fields have values.");
+                    }
+
+                    // Check Carport
+                    if (carStorageLower.includes('carport') && isEmpty(getFieldValue(tableRows, 'Carport # of Cars'))) {
+                        addValidationMessage(validationContainer, 'error', "⚠️ Validation Mismatch: 'Car Storage' includes 'Carport', but 'Carport # of Cars' is blank or zero.");
+                    } else if (!carStorageLower.includes('carport') && !isEmpty(getFieldValue(tableRows, 'Carport # of Cars'))) {
+                        addValidationMessage(validationContainer, 'error', "⚠️ Validation Mismatch: 'Carport' is not selected in 'Car Storage', but 'Carport # of Cars' has a value.");
+                    }
+                }
+            } else {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Car Storage' cannot be blank.");
+            }
+
+            // --- Appliances ---
+            const appliancesValue = getFieldValue(tableRows, 'Appliances (Refrigerator,Range/Oven, Dishwasher, Disposal, Microwave, Washer/Dryer, Other (describe))');
+            if (isEmpty(appliancesValue)) {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Appliances' section should not be blank.");
+            } else if (normalizeText(appliancesValue).includes('other') && appliancesValue.split(/[\s,]/).length < 2) {
+                 addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Appliances' is marked 'Other' but is missing a description.");
+            }
+
+            // --- Room Counts & GLA ---
+            ['Finished area above grade Rooms', 'Finished area above grade Bedrooms', 'Finished area above grade Bath(s)', 'Square Feet of Gross Living Area Above Grade'].forEach(field => {
+                if (isEmpty(getFieldValue(tableRows, field))) {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: '${field}' cannot be blank.`);
+                }
+            });
+            addValidationMessage(validationContainer, 'warning', "ℹ️ Info: Room counts and GLA will be used as a base for consistency checks in other sections.");
+
+            // --- Additional Features & Condition ---
+            const additionalFeatures = getFieldValue(tableRows, 'Additional features');
+            if (isEmpty(additionalFeatures)) { // Allows 'None' but not blank
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Additional features' cannot be blank. Should state 'None' if not applicable.");
+            }
+
+            const conditionDesc = getFieldValue(tableRows, 'Describe the condition of the property');
+            if (isEmpty(conditionDesc)) {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Describe the condition of the property' cannot be blank.");
+            } else {
+                const conditionCode = conditionDesc.match(/C[1-6]/);
+                if (!conditionCode) {
+                    addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: The property condition description must include a code from C1 to C6.");
+                } else if (conditionCode[0] === 'C5' || conditionCode[0] === 'C6') {
+                    addValidationMessage(validationContainer, 'error', `<strong>⚠️ CRITICAL WARNING: Property condition is '${conditionCode[0]}'. This requires special attention.</strong>`);
+                }
+            }
+
+            // --- Physical Deficiencies & Neighborhood Conformity ---
+            const physicalDeficiencies = getFieldValue(tableRows, 'Are there any physical deficiencies or adverse conditions that affect the livability, soundness, or structural integrity of the property?');
+            if (isEmpty(physicalDeficiencies)) {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Physical deficiencies' question cannot be blank.");
+            } else if (normalizeText(physicalDeficiencies) === 'yes') {
+                if (isEmpty(getFieldValue(tableRows, 'If Yes, describe'))) {
+                    addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Physical deficiencies' is 'Yes', but the description is missing.");
+                }
+            } else if (normalizeText(physicalDeficiencies) !== 'no') {
+                 addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Physical deficiencies' should be marked 'Yes' or 'No'.");
+            }
+
+            const neighborhoodConformity = getFieldValue(tableRows, 'Does the property generally conform to the neighborhood (functional utility, style, condition, use, construction, etc.)?');
+            if (isEmpty(neighborhoodConformity)) {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Neighborhood conformity' question cannot be blank.");
+            } else if (normalizeText(neighborhoodConformity) === 'no') {
+                if (isEmpty(getFieldValue(tableRows, 'If No, describe'))) {
+                    addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Neighborhood conformity' is 'No', but the description is missing.");
+                }
+            } else if (normalizeText(neighborhoodConformity) !== 'yes') {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Neighborhood conformity' should be marked 'Yes' or 'No'.");
+            }
+
+
+            const requiredFields = [
+                'Units', // GENERAL DESCRIPTION
+                '# of Stories', // GENERAL DESCRIPTION
+                'Type', // GENERAL DESCRIPTION
+                'Existing/Proposed/Under Const.', // GENERAL DESCRIPTION
+                'Design (Style)', // GENERAL DESCRIPTION
+                'Year Built', // GENERAL DESCRIPTION
+                'Effective Age (Yrs)', // GENERAL DESCRIPTION
+                'Foundation Type', // Foundation section
+                'Foundation Walls (Material/Condition)', // Foundation section
+                'Basement Area sq.ft.', // Foundation section
+                'Basement Finish', // Foundation section
+                'Exterior Walls (Material/Condition)', //EXTERIOR DESCRIPTION
+                'Roof Surface (Material/Condition)', //EXTERIOR DESCRIPTION
+                'Gutters & Downspouts (Material/Condition)',
+                'Window Type (Material/Condition)',
+                'Floors (Material/Condition)',
+                'Walls (Material/Condition)',
+                'Trim/Finish (Material/Condition)',
+                'Bath Floor (Material/Condition)',
+                'Bath Wainscot (Material/Condition)',
+                'Describe the condition of the property',
+            ];
+            const missingFields = [];
+            let physicalDeficienciesValue = null;
+            let conformsToNeighborhoodValue = null;
+
+            tableRows.forEach(row => {
+                const fieldCell = row.querySelector('td:first-child');
+                const valueCell = row.querySelector('td:last-child');
+                if (fieldCell && valueCell) {
+                    const fieldName = fieldCell.textContent.trim();
+                    const value = valueCell.textContent.trim();
+
+                    // Check for conditional field triggers
+                    if (fieldName === 'Are there any physical deficiencies or adverse conditions that affect the livability, soundness, or structural integrity of the property?') {
+                        physicalDeficienciesValue = normalizeText(value);
+                    }
+                    if (fieldName === 'Does the property generally conform to the neighborhood (functional utility, style, condition, use, construction, etc.)?') {
+                        conformsToNeighborhoodValue = normalizeText(value);
+                    }
+
+                    // Check if a required field is empty
+                    if (requiredFields.includes(fieldName) && isEmpty(value)) {
+                        missingFields.push(fieldName);
+                    }
+                }
+            });
+
+            // Conditionally check the "If Yes, describe" field
+            if (physicalDeficienciesValue === 'yes') {
+                const describeValue = getFieldValue(tableRows, 'If Yes, describe');
+                if (isEmpty(describeValue)) {
+                    missingFields.push('If Yes, describe (for physical deficiencies)');
+                }
+            }
+
+            // Conditionally check the "If No, describe" field
+            if (conformsToNeighborhoodValue === 'no') {
+                const describeValue = getFieldValue(tableRows, 'If No, describe');
+                if (isEmpty(describeValue)) {
+                    missingFields.push('If No, describe (for neighborhood conformity)');
+                }
+            }
+
+            if (missingFields.length > 0) {
+                addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: The following required fields are missing: ${missingFields.join(', ')}. Please fill them.`);
+            }
+            {% endif %}
+
+            {% if section_key == 'sales_grid' %}
+            // Store the 'Indicated Value by Sales Comparison Approach' for cross-validation
+            // The structure is different for the sales grid, so we find the specific cell
+            const lastRow = document.querySelector('tbody tr:last-child');
+            if (lastRow) {
+                const fieldCell = lastRow.querySelector('td:first-child');
+                if (fieldCell && fieldCell.textContent.trim() === 'Indicated Value by Sales Comparison Approach') {
+                    const valueCell = lastRow.querySelector('td:last-child');
+                    // The value is inside a <strong> tag
+                    const salesGridValue = valueCell.querySelector('strong').textContent.trim();
+                    sessionStorage.setItem('salesGridIndicatedValue', salesGridValue);
+
+                    addValidationMessage(validationContainer, 'warning', `ℹ️ Info: Stored 'Indicated Value by Sales Comparison Approach' (${salesGridValue}) for validation in the Reconciliation section.`);
+                }
+            }
+
+            // Validation for Subject's View field in Sales Grid
+            tableRows.forEach(row => {
+                const fieldCell = row.querySelector('td:first-child');
+                if (fieldCell && fieldCell.textContent.trim() === 'View') {
+                    // In the sales grid, the second cell of the row is the Subject's value
+                    const subjectValueCell = row.querySelector('td:nth-child(2)');
+                    if (subjectValueCell && isEmpty(subjectValueCell.textContent.trim())) {
+                        addValidationMessage(validationContainer, 'warning', `⚠️ Warning: The 'View' field for the Subject is missing a description. Please provide one.`);
+                    }
+                }
+            });
+            {% else %}
+            // This block seems to be a fallback for other sections to store salesGridIndicatedValue,
+            // but it's less reliable than getting it directly from the sales_grid section.
+            // It's better to ensure sales_grid is visited first if this value is critical.
+            // For now, keeping it as is, but noting its potential for inaccuracy if sales_grid isn't processed.
+            tableRows.forEach(row => {
+                const fieldCell = row.querySelector('td:first-child');
+                if (fieldCell && fieldCell.textContent.trim() === 'Indicated Value by Sales Comparison Approach') {
+                    const valueCell = row.querySelector('td:last-child');
+                    const salesGridValue = valueCell.textContent.trim();
+                    sessionStorage.setItem('salesGridIndicatedValue', salesGridValue);
+
+                    addValidationMessage(validationContainer, 'warning', `ℹ️ Info: Stored 'Indicated Value by Sales Comparison Approach' (${salesGridValue}) for validation in the Reconciliation section.`);
+                }
+            });
+            {% endif %}
+
+            {% if section_key == 'reconciliation' %}
+            // Asynchronous validation for value consistency
+            async function validateAppraisedValues() {
+                const salesGridValue = sessionStorage.getItem('salesGridIndicatedValue');
+                let reconciliationSalesApproachValue = null;
+                let finalMarketValue = null;
+
+                // Store Effective Date of Value for certification check
+                const effectiveDateOfValue = getFieldValue(tableRows, 'Effective Date of Value');
+                if (!isEmpty(effectiveDateOfValue)) {
+                    sessionStorage.setItem('reconciliationEffectiveDate', effectiveDateOfValue);
+                }
+
+                // 1. Get values from the current (Reconciliation) section
+                reconciliationSalesApproachValue = getFieldValue(tableRows, 'Indicated Value by: Sales Comparison Approach $');
+                finalMarketValue = getFieldValue(tableRows, 'Opinion of Market Value $');
+
+                // 2. Fetch Certification data from the backend
+                let certificationAppraisedValue = null;
+                try {
+                    const response = await fetch(`/api/data/{{ filename }}/certification/`);
+                    const certData = await response.json();
+                    if (certData && !certData.error) {
+                        certificationAppraisedValue = certData['APPRAISED VALUE OF SUBJECT PROPERTY $'];
+                    }
+                } catch (error) {
+                    console.error('Error fetching certification data:', error);
+                    addValidationMessage(validationContainer, 'error', '⚠️ Error fetching Certification data for full value comparison.');
+                }
+
+                // 3. Perform the validation
+                const values = {
+                    'Indicated Value by Sales Comparison Approach (from Sales Grid)': salesGridValue,
+                    'Indicated Value by: Sales Comparison Approach $ (from Reconciliation)': reconciliationSalesApproachValue,
+                    'Opinion of Market Value $ (from Reconciliation)': finalMarketValue,
+                    'APPRAISED VALUE OF SUBJECT PROPERTY $ (from Certification)': certificationAppraisedValue
+                };
+
+                const missing = Object.entries(values).filter(([key, val]) => isEmpty(val)).map(([key, val]) => `'${key}'`);
+
+                if (missing.length > 0) {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: One or more values for comparison are blank. Missing: ${missing.join(', ')}. Please ensure all relevant sections are reviewed.`);
+                } else {
+                    const normValues = Object.values(values).map(v => normalizeNumericValue(v));
+                    // Check if all normalized values are equal
+                    const allMatch = normValues.every(v => v === normValues[0]);
+
+                    if (allMatch) {
+                        addValidationMessage(validationContainer, 'success', `✅ Validation successful: All four appraised values match (${values['Indicated Value by Sales Comparison Approach (from Sales Grid)']}).`);
+                    } else {
+                        addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: Appraised values do not match. Sales Grid: ${values['Indicated Value by Sales Comparison Approach (from Sales Grid)']}, Reconciliation Sales: ${values['Indicated Value by: Sales Comparison Approach $ (from Reconciliation)']}, Final Market Value: ${values['Opinion of Market Value $ (from Reconciliation)']}, Certification Value: ${values['APPRAISED VALUE OF SUBJECT PROPERTY $ (from Certification)']}. Please correct.`);
+                    }
+                }
+            }
+            // Run the async validation
+            validateAppraisedValues();
+
+            // --- Original Reconciliation Validations ---
+            // Validation for Improvement Status vs. Reconciliation Status
+            const improvementStatus = sessionStorage.getItem('improvementStatus'); // 'existing', 'proposed', etc.
+            if (improvementStatus) {
+                let reconciliationAppraisalStatus = null;
+                const reconciliationStatusFieldIdentifier = "This appraisal is made";
+
+                tableRows.forEach(row => {
+                    const fieldCell = row.querySelector('td:first-child');
+                    if (fieldCell && fieldCell.textContent.trim().startsWith(reconciliationStatusFieldIdentifier)) {
+                        const valueCell = row.querySelector('td:last-child');
+                        reconciliationAppraisalStatus = normalizeText(valueCell.textContent.trim());
+                    }
+                });
+
+                if (reconciliationAppraisalStatus) {
+                    let isConsistent = false;
+
+                    if (improvementStatus === 'existing' && reconciliationAppraisalStatus.includes('as is')) {
+                        isConsistent = true;
+                    } else if ((improvementStatus === 'proposed' || improvementStatus === 'under const.') && reconciliationAppraisalStatus.includes('subject to completion')) {
+                        isConsistent = true;
+                    }
+
+                    if (isConsistent) {
+                        addValidationMessage(validationContainer, 'success', `✅ Validation successful: Improvement status '${improvementStatus}' is consistent with Reconciliation status '${reconciliationAppraisalStatus}'.`);
+                    } else {
+                        addValidationMessage(validationContainer, 'error', `⚠️ Validation Mismatch: Improvement status is '${improvementStatus}'. The Reconciliation status should be '${improvementStatus === 'existing' ? 'as is' : 'subject to completion...'}', but it is '${reconciliationAppraisalStatus}'. Please correct.`);
+                    }
+                } else {
+                    addValidationMessage(validationContainer, 'warning', "ℹ️ Info: Could not determine Reconciliation appraisal status for consistency check. Please ensure the field 'This appraisal is made...' is filled.");
+                }
+            } else {
+                addValidationMessage(validationContainer, 'warning', "ℹ️ Info: Could not find Improvement status from 'Improvements' section to compare. Please visit the 'Improvements' section first.");
+            }
+            {% endif %}
+
+            {% if section_key == 'certification' %}
+            // --- Helper function to get a field's value ---
+            // Using the global getFieldValue
+
+            // --- Helper function to add validation messages ---
+            // Using the global addValidationMessage
+
+            // 1. Date of Signature vs. Effective Date of Appraisal
+            const signatureDateStr = getFieldValue(tableRows, 'Date of Signature and Report');
+            const effectiveDateStr = getFieldValue(tableRows, 'Effective Date of Appraisal');
+            if (!isEmpty(signatureDateStr) && !isEmpty(effectiveDateStr)) {
+                const sigDate = new Date(signatureDateStr);
+                const effDate = new Date(effectiveDateStr);
+                if (!isNaN(sigDate.getTime()) && !isNaN(effDate.getTime())) {
+                    if (sigDate > effDate) {
+                        addValidationMessage(validationContainer, 'success', `✅ Validation successful: 'Date of Signature' (${signatureDateStr}) is after 'Effective Date of Appraisal' (${effectiveDateStr}).`);
+                    } else {
+                        addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'Date of Signature' (${signatureDateStr}) must be greater than 'Effective Date of Appraisal' (${effectiveDateStr}). Please correct.`);
+                    }
+                } else {
+                    addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: Could not parse one or both dates for comparison. Please ensure dates are in a valid format.");
+                }
+            } else {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Date of Signature and Report' or 'Effective Date of Appraisal' is blank. Both are required for date comparison.");
+            }
+
+            // 2. Effective Date of Appraisal vs. Reconciliation's "as of" date
+            const reconciliationEffectiveDate = sessionStorage.getItem('reconciliationEffectiveDate');
+            if (!isEmpty(reconciliationEffectiveDate)) {
+                if (normalizeText(effectiveDateStr) === normalizeText(reconciliationEffectiveDate)) {
+                    addValidationMessage(validationContainer, 'success', `✅ Validation successful: 'Effective Date of Appraisal' (${effectiveDateStr}) matches the 'Effective Date of Value' from the Reconciliation section.`);
+                } else {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'Effective Date of Appraisal' (${effectiveDateStr}) does not match the 'Effective Date of Value' from the Reconciliation section (${reconciliationEffectiveDate}). Please correct.`);
+                }
+            } else {
+                addValidationMessage(validationContainer, 'warning', "ℹ️ Info: Could not find 'Effective Date of Value' from Reconciliation section to compare. Please visit the Reconciliation section first.");
+            }
+            
+            // 5. LENDER/CLIENT Name should always have "fastapp"
+            const lenderClientName = getFieldValue(tableRows, 'LENDER/CLIENT Name');
+            if (!isEmpty(lenderClientName)) {
+                if (normalizeText(lenderClientName).includes('fastapp')) {
+                    addValidationMessage(validationContainer, 'success', "✅ Validation successful: 'LENDER/CLIENT Name' contains the word 'fastapp'.");
+                } else {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'LENDER/CLIENT Name' ('${lenderClientName}') does not contain the word 'fastapp'. Please correct.`);
+                }
+            } else {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'LENDER/CLIENT Name' cannot be blank.");
+            }
+
+            // Validation for Lender/Client consistency
+            const subjectState = sessionStorage.getItem('subjectState'); // Not directly used here, but good to know it's available
+            
+            const subjectLenderClient = sessionStorage.getItem('subjectLenderClient');
+            if (!isEmpty(subjectLenderClient)) {
+                const certificationLenderClientCompanyName = getFieldValue(tableRows, 'Lender/Client Company Name');
+
+                if (isEmpty(certificationLenderClientCompanyName)) {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'Lender/Client Company Name' is missing in the Certification section. The Subject section lists 'Lender/Client' as '${subjectLenderClient}'. Please fill it.`);
+                } else if (normalizeText(subjectLenderClient) === normalizeText(certificationLenderClientCompanyName)) {
+                    addValidationMessage(validationContainer, 'success', `✅ Validation successful: 'Lender/Client' ('${subjectLenderClient}') from Subject is consistent with 'Lender/Client Company Name' ('${certificationLenderClientCompanyName}') from Certification.`);
+                } else {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'Lender/Client' from Subject ('${subjectLenderClient}') mismatches 'Lender/Client Company Name' from Certification ('${certificationLenderClientCompanyName}'). Please correct.`);
+                }
+            } else {
+                addValidationMessage(validationContainer, 'warning', "ℹ️ Info: Could not find 'Lender/Client' from Subject section to compare. Please visit the Subject section first.");
+            }
+
+            // 6. Lender/Client Company Address vs. Subject section lender address
+            const subjectLenderAddress = sessionStorage.getItem('subjectLenderAddress');
+            const certificationLenderAddress = getFieldValue(tableRows, 'Lender/Client Company Address');
+            if (!isEmpty(subjectLenderAddress)) {
+                if (!isEmpty(certificationLenderAddress) && normalizeText(subjectLenderAddress) === normalizeText(certificationLenderAddress)) {
+                    addValidationMessage(validationContainer, 'success', `✅ Validation successful: 'Lender/Client Company Address' in Certification matches the address from the Subject section.`);
+                } else {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: Lender address mismatch. Subject section has '${subjectLenderAddress}', but Certification has '${certificationLenderAddress || 'a blank address'}'. Please correct.`);
+                }
+            } else {
+                addValidationMessage(validationContainer, 'warning', "ℹ️ Info: Could not find the lender address from the Subject section to compare. Please visit the Subject section first.");
+            }
+
+            // 4. ADDRESS OF PROPERTY APPRAISED vs. Subject Section Address
+            const subjectFullAddress = sessionStorage.getItem('subjectFullAddress');
+            const certificationAddress = getFieldValue(tableRows, 'ADDRESS OF PROPERTY APPRAISED');
+            if (!isEmpty(subjectFullAddress)) {
+                if (!isEmpty(certificationAddress) && normalizeText(subjectFullAddress) === normalizeText(certificationAddress)) {
+                    addValidationMessage(validationContainer, 'success', "✅ Validation successful: 'ADDRESS OF PROPERTY APPRAISED' matches the address from the Subject section.");
+                } else {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: Address mismatch. Subject section has '${subjectFullAddress}', but Certification has '${certificationAddress || 'a blank address'}'. Please correct.`);
+                }
+            } else {
+                addValidationMessage(validationContainer, 'warning', "ℹ️ Info: Could not find the full address from the Subject section to compare. Please visit the Subject section first.");
+            }
+            {% endif %}
+
+            {% if section_key == 'cost_approach' %}
+            // --- Cost Approach vs. Reconciliation Validation ---
+            async function validateCostApproachValue() {
+                // Find the specific cell for "Indicated Value By Cost Approach"
+                const costApproachRow = Array.from(tableRows).find(r => r.querySelector('td:first-child strong')?.textContent.trim() === "Indicated Value By Cost Approach");
+                const costApproachValue = costApproachRow ? costApproachRow.querySelector('td:last-child strong')?.textContent.trim() : null;
+
+                try {
+                    const response = await fetch(`/api/data/{{ filename }}/reconciliation/`);
+                    const reconData = await response.json();
+
+                    if (reconData && !reconData.error) {
+                        const reconValue = reconData["Cost Approach (if developed) $"];
+
+                        const normCostApproach = normalizeNumericValue(costApproachValue);
+                        const normRecon = normalizeNumericValue(reconValue);
+
+                        if (normCostApproach !== null && normRecon !== null && normCostApproach === normRecon) {
+                            addValidationMessage(validationContainer, 'success', `✅ Value matches Reconciliation: The 'Indicated Value By Cost Approach' (${costApproachValue}) is consistent with the 'Cost Approach (if developed) $' value in the Reconciliation section.`);
+                        } else if (normCostApproach === null && normRecon === null) {
+                            addValidationMessage(validationContainer, 'info', `ℹ️ Both 'Indicated Value By Cost Approach' and 'Cost Approach (if developed) $' are blank. Assuming consistency.`);
+                        } else {
+                            addValidationMessage(validationContainer, 'error', `⚠️ Value Mismatch: 'Indicated Value By Cost Approach' (${costApproachValue || 'N/A'}) does not match the 'Cost Approach (if developed) $' value (${reconValue || 'N/A'}) from the Reconciliation section. Please correct.`);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error fetching reconciliation data for validation:', error);
+                    addValidationMessage(validationContainer, 'error', '⚠️ Error fetching Reconciliation data for Cost Approach validation.');
+                }
+            }
+            validateCostApproachValue();
+            {% endif %}
+
+            {% if section_key == 'income_approach' %}
+            // --- Income Approach vs. Reconciliation Validation ---
+            async function validateIncomeApproachValue() {
+                // Find the value for "Indicated Value by Income Approach" from the current table
+                const incomeApproachRow = Array.from(tableRows).find(r => r.querySelector('td:first-child')?.textContent.trim() === "Indicated Value by Income Approach");
+                const incomeApproachValue = incomeApproachRow ? incomeApproachRow.querySelector('td:last-child')?.textContent.trim() : null;
+
+                try {
+                    const response = await fetch(`/api/data/{{ filename }}/reconciliation/`);
+                    const reconData = await response.json();
+
+                    if (reconData && !reconData.error) {
+                        const reconValue = reconData["Income Approach (if developed) $"];
+
+                        const normIncomeApproach = normalizeNumericValue(incomeApproachValue);
+                        const normRecon = normalizeNumericValue(reconValue);
+
+                        if (normIncomeApproach !== null && normRecon !== null && normIncomeApproach === normRecon) {
+                            addValidationMessage(validationContainer, 'success', `✅ Value matches Reconciliation: The 'Indicated Value by Income Approach' (${incomeApproachValue}) is consistent with the 'Income Approach (if developed) $' value in the Reconciliation section.`);
+                        } else if (normIncomeApproach === null && normRecon === null) {
+                            addValidationMessage(validationContainer, 'info', `ℹ️ Both 'Indicated Value by Income Approach' and 'Income Approach (if developed) $' are blank. Assuming consistency.`);
+                        } else {
+                            addValidationMessage(validationContainer, 'error', `⚠️ Value Mismatch: 'Indicated Value by Income Approach' (${incomeApproachValue || 'N/A'}) does not match the 'Income Approach (if developed) $' value (${reconValue || 'N/A'}) from the Reconciliation section. Please correct.`);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error fetching reconciliation data for validation:', error);
+                    addValidationMessage(validationContainer, 'error', '⚠️ Could not fetch Reconciliation data for Income Approach validation.');
+                }
+            }
+            // Run the async validation
+            validateIncomeApproachValue();
+            {% endif %}
+
+            {% if section_key == 'certification' %}
+            // --- Appraiser License Validation ---
+            const licenseName = getFieldValue(tableRows, 'Appraiser Name on License');
+            const licenseNumber = getFieldValue(tableRows, 'License Number on License');
+            const licenseExpDate = getFieldValue(tableRows, 'License Expiration Date on License');
+
+            if (!isEmpty(licenseName) || !isEmpty(licenseNumber) || !isEmpty(licenseExpDate)) {
+                addValidationMessage(validationContainer, 'success', '✅ Attached license found. Performing validation...');
+
+                // 1. Validate Name
+                const certName = getFieldValue(tableRows, 'Name');
+                if (!isEmpty(certName) && !isEmpty(licenseName)) {
+                    // Allow for partial matches (e.g., middle initial vs. full middle name)
+                    const certNameParts = normalizeText(certName).split(' ');
+                    const licenseNameLower = normalizeText(licenseName);
+                    const isMatch = certNameParts.every(part => licenseNameLower.includes(part));
+
+                    if (!isMatch) {
+                         addValidationMessage(validationContainer, 'error', `⚠️ Name Mismatch: Certification name is '${certName}' but license name is '${licenseName}'. Please correct.`);
+                    } else {
+                         addValidationMessage(validationContainer, 'success', `✅ Name Consistent: Certification name '${certName}' is consistent with license name '${licenseName}'.`);
+                    }
+                } else if (!isEmpty(certName) || !isEmpty(licenseName)) {
+                    addValidationMessage(validationContainer, 'warning', `⚠️ Name Check: Either Certification Name ('${certName || 'blank'}') or License Name ('${licenseName || 'blank'}') is missing. Cannot fully verify.`);
+                }
+
+                // 2. Validate License Number
+                const certLicenseNumber = getFieldValue(tableRows, 'State Certification # or State License #');
+                if (!isEmpty(certLicenseNumber) && !isEmpty(licenseNumber)) {
+                    if (normalizeText(certLicenseNumber) !== normalizeText(licenseNumber)) {
+                        addValidationMessage(validationContainer, 'error', `⚠️ License Number Mismatch: Certification number is '${certLicenseNumber}' but license number is '${licenseNumber}'. Please correct.`);
+                    } else {
+                        addValidationMessage(validationContainer, 'success', `✅ License Number Match: '${certLicenseNumber}'.`);
+                    }
+                } else if (!isEmpty(certLicenseNumber) || !isEmpty(licenseNumber)) {
+                    addValidationMessage(validationContainer, 'warning', `⚠️ License Number Check: Either Certification License Number ('${certLicenseNumber || 'blank'}') or License Number on License ('${licenseNumber || 'blank'}') is missing. Cannot fully verify.`);
+                }
+
+                // 3. Validate Expiration Date
+                const certExpDate = getFieldValue(tableRows, 'Expiration Date of Certification or License');
+                if (!isEmpty(certExpDate) && !isEmpty(licenseExpDate)) {
+                    const certDate = new Date(certExpDate);
+                    const licenseDate = new Date(licenseExpDate);
+                    if (!isNaN(certDate.getTime()) && !isNaN(licenseDate.getTime()) && certDate.getTime() !== licenseDate.getTime()) {
+                        addValidationMessage(validationContainer, 'error', `⚠️ Expiration Date Mismatch: Certification date is '${certExpDate}' but license date is '${licenseExpDate}'. Please correct.`);
+                    } else if (isNaN(certDate.getTime()) || isNaN(licenseDate.getTime())) {
+                        addValidationMessage(validationContainer, 'error', `⚠️ Expiration Date Check: Could not parse one or both expiration dates ('${certExpDate || 'blank'}', '${licenseExpDate || 'blank'}'). Please ensure valid date format.`);
+                    } else {
+                        addValidationMessage(validationContainer, 'success', `✅ License Expiration Date Match: '${certExpDate}'.`);
+                    }
+                } else if (!isEmpty(certExpDate) || !isEmpty(licenseExpDate)) {
+                    addValidationMessage(validationContainer, 'warning', `⚠️ Expiration Date Check: Either Certification Expiration Date ('${certExpDate || 'blank'}') or License Expiration Date on License ('${licenseExpDate || 'blank'}') is missing. Cannot fully verify.`);
+                }
+
+            } else {
+                addValidationMessage(validationContainer, 'warning', "⚠️ No attached appraiser license was found in the document. Manual verification of license details is required.");
+            }
+
+            // --- E&O Insurance Expiration Validation ---
+            const eoExpDateStr = getFieldValue(tableRows, 'E&O Expiration Date on Document');
+            if (!isEmpty(eoExpDateStr)) {
+                const eoExpDate = new Date(eoExpDateStr);
+                const today = new Date();
+                // Set hours to 0 to compare dates only, ignoring time
+                today.setHours(0, 0, 0, 0);
+
+                if (!isNaN(eoExpDate.getTime())) {
+                    if (eoExpDate < today) {
+                        addValidationMessage(validationContainer, 'error', `❌ E&O Insurance Expired: The policy expired on ${eoExpDateStr}.`);
+                    } else {
+                        addValidationMessage(validationContainer, 'success', `✅ E&O Insurance is valid. Expires on ${eoExpDateStr}.`);
+                    }
+                } else {
+                    addValidationMessage(validationContainer, 'error', `⚠️ E&O Expiration Date Check: Could not parse E&O Expiration Date ('${eoExpDateStr}'). Please ensure valid date format.`);
+                }
+            } else {
+                addValidationMessage(validationContainer, 'warning', "ℹ️ E&O Expiration Date on Document is blank. Please verify manually.");
+            }
+            {% endif %}
+
+            {% if section_key == 'report_details' %}
+            // --- Report Details Validation ---
+            const missingItems = [];
+            tableRows.forEach(row => {
+                const fieldCell = row.querySelector('td:first-child');
+                const valueCell = row.querySelector('td:last-child');
+                if (fieldCell && valueCell) {
+                    const value = normalizeText(valueCell.textContent.trim());
+                    if (value === 'missing') {
+                        missingItems.push(fieldCell.textContent.trim());
+                    }
+                }
+            });
+
+            if (missingItems.length > 0) {
+                addValidationMessage(validationContainer, 'error', `⚠️ Validation Failed: The following required sections/comments are missing from the report: <strong>${missingItems.join(', ')}</strong>. Please review.`);
+            } else {
+                addValidationMessage(validationContainer, 'success', '✅ Validation Passed: All required sections and comments appear to be present.');
+            }
+            {% endif %}
+
+            {% if section_key == 'escalation_check' %}
+            // --- Escalation Check Validation ---
+            const failedChecks = [];
+            tableRows.forEach(row => {
+                const findingText = normalizeText(row.querySelector('td:last-child')?.textContent.trim());
+                if (findingText && (findingText.includes('failed') || findingText.includes('critical warning'))) {
+                    failedChecks.push(row.querySelector('td:first-child')?.textContent.trim());
+                }
+            });
+
+            if (failedChecks.length > 0) {
+                addValidationMessage(validationContainer, 'error', `🚨 Escalation Required: The following checks have failed: <strong>${failedChecks.join(', ')}</strong>. Please review the details.`);
+            } else {
+                addValidationMessage(validationContainer, 'success', '✅ All automated escalation checks passed.');
+            }
+            {% endif %}
+
+            {% if section_key == 'rental_grid' %}
+            // --- Rental Grid Validation ---
+            const indicatedMarketRentRow = Array.from(tableRows).find(r => r.querySelector('td:first-child strong')?.textContent.trim() === 'Indicated Monthly Market Rent');
+            const indicatedRentValue = indicatedMarketRentRow ? indicatedMarketRentRow.querySelector('td:last-child strong')?.textContent.trim() : null;
+            const normalizedIndicatedRent = normalizeNumericValue(indicatedRentValue);
+
+            let adjustedRents = [];
+            let proximityMissing = false;
+            let dateLogicError = false;
+
+            // Find the rows for 'Adjusted Monthly Rent', 'Proximity to Subject', 'Date Lease Begins', 'Date Lease Expires'
+            const adjustedRentRow = Array.from(tableRows).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Adjusted Monthly Rent');
+            const proximityRow = Array.from(tableRows).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Proximity to Subject');
+            const leaseBeginsRow = Array.from(tableRows).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Date Lease Begins');
+            const leaseExpiresRow = Array.from(tableRows).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Date Lease Expires');
+
+            if (adjustedRentRow) {
+                const compCells = Array.from(adjustedRentRow.querySelectorAll('td')).slice(2); // Skip Feature and Subject
+                compCells.forEach(cell => {
+                    const rent = cell.textContent.trim();
+                    if (!isEmpty(rent)) {
+                        const normRent = normalizeNumericValue(rent);
+                        if (normRent !== null) adjustedRents.push(normRent);
+                    }
+                });
+            }
+
+            if (proximityRow) {
+                const proxCells = Array.from(proximityRow.querySelectorAll('td')).slice(2);
+                if (proxCells.some(cell => isEmpty(cell.textContent.trim()))) {
+                    proximityMissing = true;
+                }
+            }
+
+            if (leaseBeginsRow && leaseExpiresRow) {
+                const beginCells = Array.from(leaseBeginsRow.querySelectorAll('td')).slice(2);
+                const expireCells = Array.from(leaseExpiresRow.querySelectorAll('td')).slice(2);
+                for (let i = 0; i < beginCells.length; i++) {
+                    const beginDateStr = beginCells[i].textContent.trim();
+                    const expireDateStr = expireCells[i].textContent.trim();
+
+                    if (!isEmpty(beginDateStr) && !isEmpty(expireDateStr)) {
+                        const beginDate = new Date(beginDateStr);
+                        const expireDate = new Date(expireDateStr);
+                        if (!isNaN(beginDate.getTime()) && !isNaN(expireDate.getTime()) && expireDate <= beginDate) {
+                            dateLogicError = true;
+                            break;
+                        }
+                    } else if (!isEmpty(beginDateStr) || !isEmpty(expireDateStr)) {
+                        addValidationMessage(validationContainer, 'warning', `⚠️ Warning: Lease dates for comparable ${i + 1} are incomplete. Both 'Date Lease Begins' and 'Date Lease Expires' should be filled.`);
+                    }
+                }
+            } else {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation error: 'Date Lease Begins' or 'Date Lease Expires' rows are missing from the table.");
+            }
+
+            if (proximityMissing) addValidationMessage(validationContainer, 'error', "⚠️ Validation Failed: 'Proximity to Subject' must be noted for all rental comps. Please fill missing values.");
+            if (dateLogicError) addValidationMessage(validationContainer, 'error', "⚠️ Validation Failed: A rental comp's 'Date Lease Expires' is before or the same as its 'Date Lease Begins'. Please correct the dates.");
+
+            if (normalizedIndicatedRent !== null && adjustedRents.length > 0) {
+                const minRent = Math.min(...adjustedRents);
+                const maxRent = Math.max(...adjustedRents);
+                if (normalizedIndicatedRent < minRent || normalizedIndicatedRent > maxRent) {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation Failed: The 'Indicated Monthly Market Rent' ($${indicatedRentValue}) is not bracketed by the adjusted rents of the comparables ($${minRent} - $${maxRent}). Please adjust.`);
+                } else {
+                    addValidationMessage(validationContainer, 'success', `✅ Validation successful: 'Indicated Monthly Market Rent' ($${indicatedRentValue}) is bracketed by comparables.`);
+                }
+            } else if (normalizedIndicatedRent === null) {
+                addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Indicated Monthly Market Rent' is blank. Please provide a value.");
+            } else if (adjustedRents.length === 0) {
+                addValidationMessage(validationContainer, 'warning', "ℹ️ Info: No valid adjusted rents found for comparables. Cannot perform bracketing check.");
+            }
+            {% endif %}
+
+            {% if section_key == 'market_conditions' %}
+            // Validation for Market Conditions Inventory Analysis
+            const inventoryFieldPrefix = "Inventory Analysis";
+            const missingInventoryFields = [];
+
+            // Select the first table which is the grid
+            const gridTable = document.querySelector('table');
+            if (gridTable) {
+                const gridRows = gridTable.querySelectorAll('tbody tr');
+                gridRows.forEach(row => {
+                    const fieldCell = row.querySelector('td:first-child');
+                    if (fieldCell && fieldCell.textContent.trim().startsWith(inventoryFieldPrefix)) {
+                        const valueCells = row.querySelectorAll('td.editable-value');
+                        valueCells.forEach(cell => {
+                            const value = cell.textContent.trim();
+                            if (isEmpty(value)) {
+                                // Get a descriptive name for the missing field
+                                const fieldName = cell.dataset.fieldName || fieldCell.textContent.trim();
+                                missingInventoryFields.push(fieldName);
+                            }
+                        });
+                    }
+                });
+            }
+
+            if (missingInventoryFields.length > 0) {
+                addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: The following required fields in the Inventory Analysis grid are empty: ${missingInventoryFields.join(', ')}. Please fill them.`);
+            } else {
+                addValidationMessage(validationContainer, 'success', '✅ All Inventory Analysis fields are filled.');
+            }
+
+            {% endif %}
+
+            {% if section_key == 'condo' %}
+            // --- Condo Section Validation ---
+            const missingGridFields = [];
+            const gridTable = document.querySelector('table'); // First table is the grid
+            if (gridTable) {
+                const gridRows = gridTable.querySelectorAll('tbody tr');
+                gridRows.forEach(row => {
+                    const valueCells = row.querySelectorAll('td.editable-value');
+                    valueCells.forEach(cell => {
+                        if (isEmpty(cell.textContent.trim())) {
+                            missingGridFields.push(cell.dataset.fieldName || row.querySelector('td:first-child').textContent.trim());
+                        }
+                    });
+                });
+            }
+
+            if (missingGridFields.length > 0) {
+                addValidationMessage(validationContainer, 'error', `⚠️ Validation Failed: The following required fields in the 'Subject Project Data' grid are empty: ${missingGridFields.join(', ')}. Please fill them.`);
+            } else {
+                addValidationMessage(validationContainer, 'success', '✅ All Subject Project Data grid fields are filled.');
+            }
+            {% endif %}
+
+            {% if section_key == 'custom_analysis' %}
+            // Validation for GLA Consistency custom analysis
+            const customPrompt = `{{ custom_prompt|escapejs }}`.toLowerCase().replace(/\s+/g, ' ').trim();
+            const analysisSummary = `{{ data.analysis_summary|escapejs }}`.toLowerCase();
+            
+            const isPrompt = (text) => customPrompt.includes(text.toLowerCase());
+
+            if (isPrompt("discrepancies in the gross living area") && !isEmpty(analysisSummary)) {
+                if (analysisSummary.includes('consistent') || analysisSummary.includes('no discrepancies') || analysisSummary.includes('consistently') || analysisSummary.includes('verified') || analysisSummary.includes('match')) {
+                    addValidationMessage(validationContainer, 'success', '✅ Validation Passed: The analysis summary indicates that the GLA is consistent.');
+                } else {
+                    addValidationMessage(validationContainer, 'error', '⚠️ Validation Failed: The analysis summary indicates a potential inconsistency in the GLA. Please review the findings.');
+                }
+            }
+
+            // Validation for Subject Address and Photo custom analysis
+            if (isPrompt("subject property address is consistent") && !isEmpty(analysisSummary)) {
+                if (analysisSummary.includes('consistently') || analysisSummary.includes('verified') || analysisSummary.includes('match') || analysisSummary.includes('no discrepancies') || analysisSummary.includes('consistently') || analysisSummary.includes('present') || analysisSummary.includes('no duplicates')) {
+                    addValidationMessage(validationContainer, 'success', '✅ Validation Passed: The analysis summary indicates that the subject address and photos are consistent and present.');
+                } else {
+                    addValidationMessage(validationContainer, 'error', '⚠️ Validation Failed: The analysis summary indicates a potential issue with the subject address or photos. Please review the findings.');
+                }
+            }
+
+            // Validation for Compare Room Counts custom analysis
+            if (isPrompt("compare the bedroom and bathroom counts") && !isEmpty(analysisSummary)) {
+                if ((analysisSummary.includes('consistent') || analysisSummary.includes('match')) && (analysisSummary.includes('distinct photos') || analysisSummary.includes('no duplicate') || analysisSummary.includes('consistently'))) {
+                    addValidationMessage(validationContainer, 'success', '✅ Validation Passed: The analysis summary indicates that the room counts are consistent.');
+                } else if (analysisSummary.includes('discrepancy') || analysisSummary.includes('however')) {
+                    addValidationMessage(validationContainer, 'warning', '⚠️ Partial Validation: A discrepancy was noted. Please review the findings manually.');
+                } else {
+                    addValidationMessage(validationContainer, 'error', '❌ Validation Failed: The analysis summary indicates a potential inconsistency in room counts. Please review the findings.');
+                }
+            }
+
+            // Validation for Final Value Consistency
+            if (isPrompt("check consistent values") && isPrompt("indicated value by sales comparison approach") && !isEmpty(analysisSummary)) {
+                if (analysisSummary.includes('consistent') || analysisSummary.includes('match') || analysisSummary.includes('equal') || analysisSummary.includes('same')) {
+                    addValidationMessage(validationContainer, 'success', '✅ Validation Passed: The analysis summary indicates that the appraised values are consistent across sections.');
+                } else {
+                    addValidationMessage(validationContainer, 'error', '⚠️ Validation Failed: The analysis summary indicates a discrepancy in the appraised values. Please review the findings.');
+                }
+            }
+
+            // Validation for Verify Comparable Address and Photos custom analysis
+            if (isPrompt("match all comparable property addresses") && !isEmpty(analysisSummary)) {
+                if ((analysisSummary.includes('consistent') || analysisSummary.includes('match')) && (analysisSummary.includes('distinct photos') || analysisSummary.includes('no duplicate') || analysisSummary.includes('consistently') || analysisSummary.includes('distinct'))) {
+                    addValidationMessage(validationContainer, 'success', '✅ Validation Passed: The analysis summary indicates that comparable addresses are consistent and photos are not duplicated.');
+                } else {
+                    addValidationMessage(validationContainer, 'error', '⚠️ Validation Failed: The analysis summary indicates a potential issue with comparable addresses or duplicate photos. Please review the findings.');
+                }
+            }
+
+            // Validation for Verify Photo Lables custom analysis
+            if (isPrompt("verify all photo labels") && !isEmpty(analysisSummary)) {
+                // Check for success keywords vs failure keywords.
+                if (analysisSummary.includes('no duplicate photos were found') || (analysisSummary.includes('correctly labeled') && !analysisSummary.includes('duplicate'))) {
+                    addValidationMessage(validationContainer, 'success', '✅ Validation Passed: The analysis summary indicates all photos have labels and no duplicates were found.');
+                } else if (analysisSummary.includes('duplicate photos were found') || analysisSummary.includes('missing label')) {
+                    addValidationMessage(validationContainer, 'error', '⚠️ Validation Failed: The analysis summary indicates that duplicate photos were found. Please review the findings.');
+                } else {
+                    addValidationMessage(validationContainer, 'warning', '❓ Validation Inconclusive: The analysis summary for photo labels could not be definitively categorized. Please review manually.');
+                }
+            }
+
+            // Validation for ADU Criteria Check
+            if (isPrompt("one with accessory unit' is selected") && !isEmpty(analysisSummary)) {
+                // Check for success keywords vs failure keywords.
+                if (analysisSummary.includes("report's selection aligns") || analysisSummary.includes("correctly checked") || analysisSummary.includes("correctly unchecked") || (analysisSummary.includes("checked") && analysisSummary.includes("criteria met"))) {
+                    addValidationMessage(validationContainer, 'success', '✅ Validation Passed: The ADU selection aligns with the analysis criteria.');
+                } else if (analysisSummary.includes("does not align") || analysisSummary.includes("incorrectly checked") || analysisSummary.includes("discrepancy") || analysisSummary.includes("failed")) {
+                    addValidationMessage(validationContainer, 'error', '⚠️ Validation Failed: The analysis summary indicates a discrepancy with the ADU criteria. Please review the findings.');
+                } else {
+                    addValidationMessage(validationContainer, 'warning', '❓ Validation Inconclusive: The ADU criteria analysis could not be definitively categorized. Please review manually.');
+                }
+            }
+
+            // Validation for Common Prompt
+            if (isPrompt("please check and verify if below revision requests are addressed") && !isEmpty(analysisSummary)) {
+                if (analysisSummary.includes("not corrected") || analysisSummary.includes("not addressed") || analysisSummary.includes("missing") || analysisSummary.includes("blank") || analysisSummary.includes("inconsistent")) {
+                     addValidationMessage(validationContainer, 'error', '⚠️ Validation Failed: The analysis indicates that some revision requests or checks were not addressed or failed. Please review the findings.');
+                } else if (analysisSummary.includes("corrected") || analysisSummary.includes("addressed") || analysisSummary.includes("verified") || analysisSummary.includes("consistent")) {
+                    addValidationMessage(validationContainer, 'success', '✅ Validation Passed: The analysis indicates that revision requests and checks appear to be addressed.');
+                } else {
+                    addValidationMessage(validationContainer, 'warning', '❓ Validation Inconclusive: Please review the analysis summary manually.');
+                }
+            }
+            {% endif %}
+
+            {% if section_key == 'sales_grid_adjustment' %}
+            // Validation for Sales Grid Adjustment analysis results
+            const analysisDetails = {{ data.adjustment_analysis.details|safe }};
+
+            if (analysisDetails && Array.isArray(analysisDetails)) {
+                analysisDetails.forEach(detail => {
+                    const detailLower = normalizeText(detail);
+
+                    // Determine message type based on keywords
+                    if (detailLower.includes('failed') || detailLower.includes('inconsistent') || detailLower.includes('exceeds') || detailLower.includes('error')) {
+                        addValidationMessage(validationContainer, 'error', `❌ ${detail}`);
+                    } else if (detailLower.includes('passed') || detailLower.includes('consistent')) {
+                        addValidationMessage(validationContainer, 'success', `✅ ${detail}`);
+                    } else {
+                        addValidationMessage(validationContainer, 'warning', `⚠️ ${detail}`);
+                    }
+                });
+            } else {
+                addValidationMessage(validationContainer, 'error', '⚠️ Could not find adjustment analysis details to validate.');
+            }
+            {% endif %}
+
+            {% if section_key == 'sale_history' %}
+            // --- Sale History Section Validation ---
+            const researchAndAnalysisTable = document.querySelectorAll('table')[1]; // Second table on the page
+            const gridTable = document.querySelectorAll('table')[0]; // First table
+
+            const getResearchFieldValue = (fieldName) => {
+                const row = Array.from(researchAndAnalysisTable.querySelectorAll('tbody tr')).find(r => r.querySelector('td:first-child')?.textContent.trim().startsWith(fieldName));
+                return row ? row.querySelector('td:last-child')?.textContent.trim() : null;
+            };
+
+            // Rule 1: Check required fields in Research and Analysis
+            const requiredResearchFields = [
+                "I ____ research the sale or transfer history",
+                "My research _____ reveal any prior sales or transfers of the subject property",
+                "Data Source(s) for subject property research",
+                "My research ______ reveal any prior sales or transfers of the comparable sales",
+                "Data Source(s) for comparable sales research",
+                "Analysis of prior sale or transfer history"
+            ];
+            const missingResearchFields = requiredResearchFields.filter(field => isEmpty(getResearchFieldValue(field)));
+
+            if (missingResearchFields.length > 0) {
+                addValidationMessage(validationContainer, 'error', `⚠️ Validation Failed: The following required fields in the 'Research and Analysis' section are empty: ${missingResearchFields.join(', ')}. Please fill them.`);
+            } else {
+                addValidationMessage(validationContainer, 'success', `✅ Validation Passed: All required 'Research and Analysis' fields are filled.`);
+            }
+
+            // Rule 2: "I ____ research..." must be "did"
+            const researchPerformed = getResearchFieldValue("I ____ research the sale or transfer history");
+            if (!isEmpty(researchPerformed) && normalizeText(researchPerformed) !== 'did') {
+                addValidationMessage(validationContainer, 'error', `⚠️ Validation Failed: 'I ____ research the sale or transfer history...' must be marked 'did', but it is '${researchPerformed}'. Please correct.`);
+            } else if (!isEmpty(researchPerformed)) {
+                addValidationMessage(validationContainer, 'success', `✅ Validation Passed: Research was performed ('did').`);
+            }
+
+            // Rule 3: Conditional validation for Subject prior sale
+            const subjectHistoryFound = getResearchFieldValue("My research _____ reveal any prior sales or transfers of the subject property");
+            if (!isEmpty(subjectHistoryFound) && normalizeText(subjectHistoryFound) === 'did') {
+                const subjectDate = getFieldValue(gridTable.querySelectorAll('tbody tr'), 'Date of Prior Sale/Transfer - Subject');
+                const subjectPrice = getFieldValue(gridTable.querySelectorAll('tbody tr'), 'Price of Prior Sale/Transfer - Subject');
+
+                if (isEmpty(subjectDate) || isEmpty(subjectPrice)) {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation Failed: Report indicates a prior sale for the Subject was found, but 'Date of Prior Sale/Transfer' or 'Price of Prior Sale/Transfer' is missing in the grid. Please provide both.`);
+                } else {
+                    addValidationMessage(validationContainer, 'success', `✅ Validation Passed: Subject prior sale details are present as required.`);
+                }
+            }
+
+            // Rule 4: Conditional validation for Comparables' prior sales
+            const compHistoryFound = getResearchFieldValue("My research ______ reveal any prior sales or transfers of the comparable sales");
+            if (!isEmpty(compHistoryFound) && normalizeText(compHistoryFound) === 'did') {
+                const compDateRow = Array.from(gridTable.querySelectorAll('tbody tr')).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Date of Prior Sale/Transfer');
+                const compPriceRow = Array.from(gridTable.querySelectorAll('tbody tr')).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Price of Prior Sale/Transfer');
+
+                if (compDateRow && compPriceRow) {
+                    const compDateCells = Array.from(compDateRow.querySelectorAll('td')).slice(2); // Skip Feature and Subject columns
+                    const compPriceCells = Array.from(compPriceRow.querySelectorAll('td')).slice(2);
+
+                    let atLeastOneCompHasData = false;
+                    for (let i = 0; i < compDateCells.length; i++) {
+                        const date = compDateCells[i].textContent.trim();
+                        const price = compPriceCells[i].textContent.trim();
+                        if (!isEmpty(date) && !isEmpty(price)) {
+                            atLeastOneCompHasData = true;
+                            break;
+                        }
+                    }
+
+                    if (!atLeastOneCompHasData) {
+                        addValidationMessage(validationContainer, 'error', `⚠️ Validation Failed: Report indicates prior sales for Comparables were found, but no comparable has both 'Date of Prior Sale/Transfer' and 'Price of Prior Sale/Transfer' filled in the grid. Please provide details for at least one comparable.`);
+                    } else {
+                        addValidationMessage(validationContainer, 'success', `✅ Validation Passed: At least one comparable has prior sale details as required.`);
+                    }
+                } else {
+                    addValidationMessage(validationContainer, 'error', `⚠️ Validation Failed: 'Date of Prior Sale/Transfer' or 'Price of Prior Sale/Transfer' rows are missing from the grid for comparables.`);
+                }
+            }
+            {% endif %}
+
+            {% if section_key == 'pud_info' %}
+            // Validation for PUD Info section based on 'isPUD' flag
+            if (sessionStorage.getItem('isPUD') === 'true') {
+                let devInControl = null;
+                const requiredFields = [
+                    "Legal Name of Project", "Total number of phases", "Total number of units",
+                    "Total number of units sold", "Total number of units rented",
+                    "Total number of units for sale", "Data source(s)"
+                ];
+                const missingFields = [];
+
+                devInControl = normalizeText(getFieldValue(tableRows, "Is the developer/builder in control of the Homeowners' Association (HOA)?"));
+
+                if (devInControl === 'yes') {
+                    tableRows.forEach(row => {
+                        const fieldCell = row.querySelector('td:first-child');
+                        const valueCell = row.querySelector('td:last-child');
+                        const fieldName = fieldCell.textContent.trim();
+                        const value = valueCell.textContent.trim();
+
+                        if (requiredFields.includes(fieldName) && isEmpty(value)) {
+                            missingFields.push(fieldName);
+                        }
+                    });
+
+                    if (missingFields.length > 0) {
+                        addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: Since the developer is in control of the HOA, the following fields are required but are empty: ${missingFields.join(', ')}. Please fill them.`);
+                    } else {
+                        addValidationMessage(validationContainer, 'success', '✅ All required PUD Info fields are filled when developer is in control.');
+                    }
+                } else if (devInControl === 'no') {
+                    addValidationMessage(validationContainer, 'success', '✅ Developer is not in control of HOA. Specific fields are not strictly required.');
+                } else if (isEmpty(devInControl)) {
+                    addValidationMessage(validationContainer, 'error', "⚠️ Validation warning: 'Is the developer/builder in control of the Homeowners' Association (HOA)?' field cannot be blank. Please select an option.");
+                }
+            } else {
+                addValidationMessage(validationContainer, 'info', "ℹ️ PUD is not marked 'Yes' in the Subject section. This 'PUD Info' section is not strictly required.");
+            }
+            {% endif %}
+            {% if section_key == 'state_requirement' %}
+            function runStateValidations() {
+                const validationContainer = document.getElementById('validation-container');
+                validationContainer.innerHTML = ''; // Clear previous messages
+                const subjectState = sessionStorage.getItem('subjectState');
+                const tableRows = document.querySelectorAll('tbody tr');
+
+                if (isEmpty(subjectState)) {
+                    addValidationMessage(validationContainer, 'error', "⚠️ Could not determine the property's state. Please review the 'Subject' section first.");
+                    return;
+                }
+
+                // --- Fee & License Requirements ---
+                const feeStates = ['AZ', 'CO', 'CT', 'GA', 'IL', 'LA', 'NJ', 'NV', 'NM', 'ND', 'OH', 'UT', 'VA', 'VT', 'WV'];
+                const amcLicenseStates = ['GA', 'IL', 'MT', 'NJ', 'OH', 'VT'];
+                const amcFeeStates = ['NV', 'NM', 'UT'];
+                let hasRulesApplied = false;
+
+                const checkRequirement = (applies, fieldName, finding) => {
+                    if (!applies) return;
+                    hasRulesApplied = true;
+                    const normalizedFinding = normalizeText(finding);
+                    if (normalizedFinding && (normalizedFinding.includes('found') || normalizedFinding.includes('disclosed') || normalizedFinding.includes('present') || normalizedFinding.includes('verified') || normalizedFinding.includes('passed'))) {
+                        addValidationMessage(validationContainer, 'success', `✅ <strong>${fieldName}:</strong> Passed. Requirement appears to be met.`);
+                    } else if (normalizedFinding && (normalizedFinding.includes('not found') || normalizedFinding.includes('missing') || normalizedFinding.includes('not present') || normalizedFinding.includes('failed'))) {
+                        addValidationMessage(validationContainer, 'error', `❌ <strong>${fieldName}:</strong> Failed. Requirement was not met according to the analysis.`);
+                    } else {
+                        addValidationMessage(validationContainer, 'warning', `⚠️ <strong>${fieldName}:</strong> Needs Review. The analysis was inconclusive. Please verify manually.`);
+                    }
+                };
+
+                if (feeStates.includes(subjectState)) {
+                    checkRequirement(true, 'Appraiser Fee Disclosure', getFieldValue(tableRows, 'Appraiser Fee Disclosure'));
+                }
+                if (amcLicenseStates.includes(subjectState)) {
+                    checkRequirement(true, 'AMC License Disclosure', getFieldValue(tableRows, 'AMC License Disclosure'));
+                }
+                if (amcFeeStates.includes(subjectState)) {
+                    checkRequirement(true, 'AMC Fee Disclosure', getFieldValue(tableRows, 'AMC Fee Disclosure'));
+                }
+
+                // --- Specific State Guidelines ---
+                switch (subjectState) {
+                    case 'CA':
+                        checkRequirement(true, 'Smoke/CO Detector Requirements', getFieldValue(tableRows, 'Smoke/CO Detector Requirements'));
+                        checkRequirement(true, 'Water Heater Strapping', getFieldValue(tableRows, 'Water Heater Strapping'));
+                        hasRulesApplied = true;
+                        break;
+                    case 'GA':
+                        addValidationMessage(validationContainer, 'warning', `<strong>GA Specific:</strong> Appraiser’s fee & AMC License # are required.`);
+                        hasRulesApplied = true; // Mark as true since we added a specific message
+                        break;
+                    case 'IL':
+                        checkRequirement(true, 'Smoke/CO Detector Requirements', getFieldValue(tableRows, 'Smoke/CO Detector Requirements'));
+                        checkRequirement(true, 'State-Specific Legal Statements', getFieldValue(tableRows, 'State-Specific Legal Statements'));
+                        hasRulesApplied = true;
+                        break;
+                    case 'NY':
+                        checkRequirement(true, 'Invoice Copy Requirement', getFieldValue(tableRows, 'Invoice Copy Requirement'));
+                        hasRulesApplied = true;
+                        break;
+                    case 'OH':
+                    case 'VT':
+                        addValidationMessage(validationContainer, 'warning', `<strong>${subjectState} Specific:</strong> Appraiser’s fee & AMC License # are required.`);
+                        hasRulesApplied = true; // Mark as true since we added a specific message
+                        break;
+                    case 'UT':
+                        checkRequirement(true, 'Water Heater Strapping', getFieldValue(tableRows, 'Water Heater Strapping'));
+                        hasRulesApplied = true;
+                        break;
+                    case 'VA':
+                        checkRequirement(true, 'Smoke/CO Detector Requirements', getFieldValue(tableRows, 'Smoke/CO Detector Requirements'));
+                        hasRulesApplied = true;
+                        break;
+                    case 'WI':
+                        checkRequirement(true, 'Smoke/CO Detector Requirements', getFieldValue(tableRows, 'Smoke/CO Detector Requirements'));
+                        hasRulesApplied = true;
+                        break;
+                }
+
+                // Check if any rules were applied. If not, show the 'no rules' message.
+                if (!hasRulesApplied) {
+                     addValidationMessage(validationContainer, 'success', `✅ No specific state-level requirements found for <strong>${subjectState}</strong> in the defined rules.`);
+                }
+
+            }
+            // Override the default validate button behavior for this specific section
+            document.getElementById('validate-btn').addEventListener('click', runStateValidations);
+            // Run validations on initial page load
+            runStateValidations();
+            {% else %}
+            {% comment %} Add client_lender_requirements validation here {% endcomment %}
+            {% if section_key == 'client_lender_requirements' %}
+            function runClientLenderValidations() {
+                const validationContainer = document.getElementById('validation-container');
+                validationContainer.innerHTML = ''; // Clear previous messages
+                const tableRows = document.querySelectorAll('tbody tr');
+
+                // Using the global getFieldValue and addValidationMessage
+
+                // Iterate through each row in the table for client/lender requirements
+                let clientIdentified = false; // Flag to check if a client was identified
+
+                tableRows.forEach(row => {
+                    const fieldCell = row.querySelector('td:first-child');
+                    const valueCell = row.querySelector('td:last-child');
+
+                    if (fieldCell && valueCell) {
+                        const fieldName = fieldCell.textContent.trim();
+                        const value = valueCell.textContent.trim();
+                        const valueLower = normalizeText(value);
+
+                        if (valueLower.includes('n/a - client not identified')) {
+                            addValidationMessage(validationContainer, 'error', `⚠️ <strong>${fieldName}:</strong> ${value}`);
+                            return; // Skip further processing for this row if client not identified
+                        }
+
+                        if (valueLower.includes('n/a - rule does not apply')) {
+                            addValidationMessage(validationContainer, 'success', `✅ <strong>${fieldName}:</strong> ${value}`);
+                            clientIdentified = true;
+                        } else if (valueLower.includes('passed:')) {
+                            addValidationMessage(validationContainer, 'success', `✅ <strong>${fieldName}:</strong> ${value.replace(/passed:/i, '').trim()}`);
+                            clientIdentified = true;
+                        } else if (valueLower.includes('failed:')) {
+                            addValidationMessage(validationContainer, 'error', `❌ <strong>${fieldName}:</strong> ${value.replace(/failed:/i, '').trim()}`);
+                            clientIdentified = true;
+                        } else if (valueLower.includes('info:')) {
+                            addValidationMessage(validationContainer, 'warning', `ℹ️ <strong>${fieldName}:</strong> ${value.replace(/info:/i, '').trim()}`);
+                            clientIdentified = true;
+                        } else if (valueLower.includes('advisory:')) {
+                            addValidationMessage(validationContainer, 'warning', `⚠️ <strong>${fieldName}:</strong> ${value.replace(/advisory:/i, '').trim()}`);
+                            clientIdentified = true;
+                        } else if (valueLower.includes('escalate:')) {
+                            addValidationMessage(validationContainer, 'error', `🚨 <strong>${fieldName}:</strong> ${value.replace(/escalate:/i, '').trim()}`);
+                            clientIdentified = true;
+                        } else if (valueLower.includes('reviewer reminders:')) {
+                            addValidationMessage(validationContainer, 'warning', `ℹ️ <strong>${fieldName}:</strong> ${value.replace(/reviewer reminders:/i, '').trim()}`);
+                            clientIdentified = true;
+                        } else if (valueLower.includes('rov handling:')) {
+                            addValidationMessage(validationContainer, 'warning', `ℹ️ <strong>${fieldName}:</strong> ${value.replace(/rov handling:/i, '').trim()}`);
+                            clientIdentified = true;
+                        } else if (valueLower.startsWith('n/a -')) { // Catch all N/A messages not specifically "rule does not apply"
+                            addValidationMessage(validationContainer, 'success', `✅ <strong>${fieldName}:</strong> ${value}`);
+                            clientIdentified = true;
+                        } else if (!isEmpty(value)) {
+                            // Default handling for any other non-empty value, perhaps a general warning or info
+                            addValidationMessage(validationContainer, 'warning', `❓ <strong>${fieldName}:</strong> Uncategorized finding: ${value}`);
+                            clientIdentified = true;
+                        }
+                    }
+                });
+
+                if (!clientIdentified) {
+                    addValidationMessage(validationContainer, 'error', `⚠️ <strong>Client Identification:</strong> Could not identify a specific client or apply any rules. Please ensure the client name is present in the report.`);
+                }
+            }
+            // Override the default validate button behavior for this specific section
+            document.getElementById('validate-btn').addEventListener('click', runClientLenderValidations);
+            // Run validations on initial page load
+            runClientLenderValidations();
+            {% else %}
+            // Add event listener for the validate button for all other sections
+            document.getElementById('validate-btn').addEventListener('click', runValidations);
+            // Run validations on initial page load (after revision setup)
+            runValidations();
+            {% endif %}
+            {% endif %}
+
+            // --- Custom Analysis Page Specific JS ---
+            if (document.body.contains(document.getElementById('custom-analysis-form'))) {
+                document.querySelectorAll('.prompt-suggestion-btn').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const promptText = this.getAttribute('data-prompt');
+                        const textarea = document.querySelector('#custom-analysis-form textarea[name="custom_prompt"]');
+                        textarea.value = promptText;
+                        textarea.focus();
+                    });
+                });
+
+                document.getElementById('custom-analysis-form').addEventListener('submit', function(event) {
+                    const promptText = this.querySelector('textarea[name="custom_prompt"]').value;
+                    if (promptText.trim() === '') {
+                        alert('Please enter a question or instruction for the analysis.');
+                        event.preventDefault(); // Stop the form from submitting
+                    } else {
+                        // The loading overlay is in the main content, so we need to show it
+                        const loadingOverlay = document.getElementById('loading-overlay');
+                        if(loadingOverlay) loadingOverlay.style.display = 'flex';
+                    }
+                });
+
+                const finishBtn = document.getElementById('finish-review-btn');
+                if (finishBtn) {
+                    finishBtn.addEventListener('click', function() {
+                        const startTimeISO = new Date(parseInt(sessionStorage.getItem('reviewStartTime'))).toISOString();
+                        const endTimeISO = new Date().toISOString();
+                        const user = "{{ user.username }}";
+                        const filename = "{{ filename }}";
+
+                        const reportData = {
+                            user: user,
+                            filename: filename,
+                            startTime: startTimeISO,
+                            endTime: endTimeISO
+                        };
+
+                        // Send data to the backend to be logged
+                        navigator.sendBeacon("{% url 'generate_report' %}", JSON.stringify(reportData));
+
+                        // Clear session storage for the next review
+                        sessionStorage.removeItem('reviewStartTime');
+                        // Redirect to the new upload page
+                        window.location.href = "{% url 'upload_pdf' %}";
+                    });
+                }
+            }
+
+            // Add loader for the new default analysis form
+            const defaultAnalysisButton = document.querySelector('button[data-form-id="default-analysis-form"]');
+            if (defaultAnalysisButton) {
+                defaultAnalysisButton.addEventListener('click', function() {
+                    document.getElementById('loading-overlay').style.display = 'flex';
+                });
+            }
+
+            // --- Revision Helper Toggle ---
+            const revisionHelperCard = document.querySelector('.revision-helper-card');
+            if (revisionHelperCard) {
+                const header = revisionHelperCard.querySelector('.revision-helper-header');
+                const toggleBtn = revisionHelperCard.querySelector('.toggle-revision-helper-btn');
+
+                header.addEventListener('click', function() {
+                    revisionHelperCard.classList.toggle('expanded');
+                    if (revisionHelperCard.classList.contains('expanded')) {
+                        toggleBtn.textContent = 'Hide';
+                    } else {
+                        toggleBtn.textContent = 'Show';
+                    }
+                });
+            }
+        });
+    </script>
 </html>

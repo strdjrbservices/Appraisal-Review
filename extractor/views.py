@@ -106,7 +106,7 @@ async def upload_pdf(request):
         # Create display names for the buttons
         sections_for_template = {
             key: key.replace('_', ' ').title() 
-            for key in FIELD_SECTIONS.keys() if key not in ['uniform_report', 'addendum', 'appraisal_id', 'additional_comments', 'base_info']
+            for key in FIELD_SECTIONS.keys() if key not in ['uniform_report', 'addendum', 'appraisal_id', 'additional_comments', 'base_info', 'd1004', 'fha_check', 'combined_comparison']
         }
 
         # Render the home page with section buttons and data from both files
@@ -147,9 +147,29 @@ async def update_file_review_process_view(request):
         revised_path = await sync_to_async(fs.path)(revised_filename)
         old_path = await sync_to_async(fs.path)(old_filename)
 
-        # This part is now simplified as optional files are not passed from the dashboard GET request.
-        # If they are needed for the summary, the logic would need to be adjusted to pass their filenames too.
-        comparison_results = await compare_revised_vs_old(revised_path, old_path, {})
+        # Reconstruct optional_files from GET parameters
+        optional_files = {}
+        optional_file_names = {
+            'order_form': request.GET.get('order_form_filename'),
+            'purchase_copy': request.GET.get('purchase_copy_filename'),
+            'engagement_letter': request.GET.get('engagement_letter_filename'),
+        }
+
+        for field_name, filename in optional_file_names.items():
+            if filename and await sync_to_async(fs.exists)(filename):
+                path = await sync_to_async(fs.path)(filename)
+                optional_files[field_name] = {'path': path, 'name': filename}
+
+        comparison_results = await compare_revised_vs_old(revised_path, old_path, optional_files)
+
+        # Pass filenames back to the results template for the custom analysis form
+        comparison_results['revised_filename'] = revised_filename
+        comparison_results['old_filename'] = old_filename
+        comparison_results['optional_files'] = {
+            'order_form': {'name': optional_file_names['order_form']},
+            'purchase_copy': {'name': optional_file_names['purchase_copy']},
+            'engagement_letter': {'name': optional_file_names['engagement_letter']},
+        }
 
         context = {
             'results': comparison_results,
@@ -195,7 +215,7 @@ async def update_file_review_process_view(request):
             # Create display names for the section buttons
             sections_for_template = {
                 key: key.replace('_', ' ').title()
-                for key in FIELD_SECTIONS.keys() if key not in ['uniform_report', 'addendum', 'appraisal_id', 'additional_comments', 'base_info', 'd1004']
+                for key in FIELD_SECTIONS.keys() if key not in ['uniform_report', 'addendum', 'appraisal_id', 'additional_comments', 'base_info', 'd1004', 'fha_check', 'combined_comparison']
             }
 
             context = {
@@ -271,7 +291,7 @@ async def d1004_file_review_process_view(request):
         # Create display names for the section buttons (for the original report)
         sections_for_template = {
             key: key.replace('_', ' ').title()
-            for key in FIELD_SECTIONS.keys() if key not in ['uniform_report', 'addendum', 'appraisal_id', 'additional_comments', 'base_info', 'd1004']
+            for key in FIELD_SECTIONS.keys() if key not in ['uniform_report', 'addendum', 'appraisal_id', 'additional_comments', 'base_info', 'd1004', 'fha_check', 'combined_comparison']
         }
 
         context = {
@@ -895,7 +915,7 @@ async def extract_section(request, filename, section_name):
         # Create display names for the sidebar sections
         sections_for_template = {
             key: key.replace('_', ' ').title() 
-            for key in FIELD_SECTIONS.keys() if key not in ['uniform_report', 'addendum', 'appraisal_id', 'additional_comments']
+            for key in FIELD_SECTIONS.keys() if key not in ['uniform_report', 'addendum', 'appraisal_id', 'additional_comments', 'd1004', 'fha_check', 'combined_comparison']
         }
 
         # Flag to show the revision helper for the subject section

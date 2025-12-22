@@ -25,5 +25,5 @@ urlpatterns = [
     path('api/data/<str:filename>/<str:section_name>/', views.get_section_data_api, name='get_section_data_api'),
     
     # Add this line to serve the favicon
-    path('favicon.ico', RedirectView.as_view(url=staticfiles_storage.url('extractor/img/favicon.ico'))),
+    path('favicon.ico', RedirectView.as_view(url=staticfiles_storage.url('extractor/img/favicon.ico')))
 ]

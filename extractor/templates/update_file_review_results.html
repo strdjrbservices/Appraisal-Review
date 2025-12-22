@@ -56,8 +56,8 @@
                     </div>
                     <form action="{% url 'update_file_review_custom_analysis' %}" method="post" id="custom-analysis-form">
                         {% csrf_token %}
-                        <input type="hidden" name="revised_filename" value="{{ revised_filename }}">
-                        <input type="hidden" name="old_filename" value="{{ old_filename }}">
+                        <input type="hidden" name="revised_filename" value="{{ results.revised_filename }}">
+                        <input type="hidden" name="old_filename" value="{{ results.old_filename }}">
                         {% if results.optional_files.order_form.name %}<input type="hidden" name="order_form_filename" value="{{ results.optional_files.order_form.name }}">{% endif %}
                         {% if results.optional_files.purchase_copy.name %}<input type="hidden" name="purchase_copy_filename" value="{{ results.optional_files.purchase_copy.name }}">{% endif %}
                         {% if results.optional_files.engagement_letter.name %}<input type="hidden" name="engagement_letter_filename" value="{{ results.optional_files.engagement_letter.name }}">{% endif %}
