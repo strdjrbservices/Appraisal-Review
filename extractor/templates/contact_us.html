@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block title %}Contact Us{% endblock %}
+
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto; padding: 20px;">
+    <div style="background-color: #fff; padding: 3rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);">
+        <h2 style="text-align: center; color: #111827; margin-bottom: 1.5rem; font-family: 'Montserrat', sans-serif;">Contact Us</h2>
+        
+        <p style="text-align: center; color: #6b7280; margin-bottom: 3rem; line-height: 1.6; font-size: 1.1em;">
+            If you are experiencing any issues with the portal, encountering errors, or have questions regarding the appraisal review process, please reach out to the appropriate contact below.
+        </p>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px;">
+            <!-- Technical Support -->
+            <div style="padding: 30px; border: 1px solid #e5e7eb; border-radius: 12px; text-align: center; background-color: #f9fafb;">
+                <h3 style="color: #0f172a; margin-top: 0; margin-bottom: 15px;">Technical Support</h3>
+                <p style="color: #6b7280; font-size: 0.95em; margin-bottom: 20px;">For portal errors, login issues, or bugs.</p>
+                <div style="margin-bottom: 10px;">
+                    <strong>Email:</strong> <a href="mailto:victor@fastapp.com" style="color: #0d6efd; text-decoration: none;">victor@fastapp.com</a>
+                </div>
+                <div><strong>Phone:</strong> +1 (555) 012-3456</div>
+            </div>
+
+            <!-- Admin / General Inquiries -->
+            <div style="padding: 30px; border: 1px solid #e5e7eb; border-radius: 12px; text-align: center; background-color: #f9fafb;">
+                <h3 style="color: #0f172a; margin-top: 0; margin-bottom: 15px;">Admin & Inquiries</h3>
+                <p style="color: #6b7280; font-size: 0.95em; margin-bottom: 20px;">For account access, permissions, and general questions.</p>
+                <div style="margin-bottom: 10px;">
+                    <strong>Email:</strong> <a href="mailto:strdjrbservices@gmail.com" style="color: #0d6efd; text-decoration: none;">strdjrbservices@gmail.com</a>
+                </div>
+                <div><strong>Phone:</strong> +1 (555) 012-7890</div>
+            </div>
+        </div>
+
+        <div style="margin-top: 40px; text-align: center;">
+            <a href="javascript:history.back()" class="btn" style="display: inline-block; text-decoration: none; width: auto; padding: 10px 30px; background-color: #6b7280; border-color: #6b7280;">&larr; Go Back</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

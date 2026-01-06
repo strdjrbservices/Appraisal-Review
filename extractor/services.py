@@ -28,7 +28,7 @@ CONTRACT_FIELDS = [
     'I _____ analyze the contract for sale for the subject purchase transaction.', 
     'Explain the results of the analysis of the contract for sale or why the analysis was not performed.',
     'Contract Price $', 'Date of Contract', 'Is the property seller the owner of public record?(Yes/No)', 'Data Source(s)',
-    'Is there any financial assistance (loan charges, sale concessions, gift or downpay i etc.) to be paid by any party on behalf of the borrower?(Yes/No)',
+    'Is there any financial assistance (loan charges, sale concessions, gift or downpayment assistance, etc.) to be paid by any party on behalf of the borrower?(Yes/No)',
     'If Yes, report the total dollar amount and describe the items to be paid.',
 ]
 
@@ -537,6 +537,11 @@ CUSTOM_ANALYSIS_FIELDS = [
 ]
 # A dictionary to map section names to their corresponding field lists
 
+# ALL IN ONE CHECK
+ALL_IN_ONE_CHECK_FIELDS = [
+    "Comprehensive check placeholder" # Placeholder
+]
+
 # FHA CHECK
 FHA_CHECK_FIELDS = [
     "FHA case number on all pages",
@@ -570,6 +575,7 @@ FIELD_SECTIONS = {
     "client_lender_requirements": CLIENT_LENDER_REQUIREMENTS_FIELDS,
     "escalation_check": ESCALATION_CHECK_FIELDS,
     "d1004": D1004_FIELDS,
+    "all_in_one_check": ALL_IN_ONE_CHECK_FIELDS,
     "custom_analysis": CUSTOM_ANALYSIS_FIELDS,
     "fha_check": FHA_CHECK_FIELDS,
 }
@@ -600,7 +606,7 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
     # Get the correct field list based on the section name
     fields_to_extract = FIELD_SECTIONS.get(section_name.lower(), [])
     # Allow sections with complex prompts even if their field list is a placeholder or used differently
-    if not fields_to_extract and section_name.lower() not in ['sale_history', 'custom_analysis', 'client_lender_requirements', 'report_details', 'combined_comparison']:
+    if not fields_to_extract and section_name.lower() not in ['sale_history', 'custom_analysis', 'client_lender_requirements', 'report_details', 'combined_comparison', 'all_in_one_check']:
         return {"error": f"Invalid section name provided: {section_name}"}
 
     prompt = ""
@@ -941,41 +947,27 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
             *   `"details"`: An array of strings, where each string is a detailed explanation of a specific finding (consistent or inconsistent).
 
         **Instructions:**
-        1.  **Extract Data:** For the subject and each comparable, extract all fields listed below. 
-            *   **Crucial:** If a field is blank, empty, or not applicable (e.g., '--'), use `null` as its value. 
-            *   **Signs:** Pay extremely close attention to negative adjustments. They are often in parentheses `($5,000)` or have a minus sign. You MUST extract them as negative numbers (e.g., "-5000"). Positive adjustments may have a `+` or no sign.
-        2.  **Perform Detailed Validation and Analysis:**
-            *   **Sale Price Bracketing:** Find the final "Opinion of Market Value" (usually in the Reconciliation section or at the bottom of the Sales Grid). Verify if this value is bracketed by the unadjusted sale prices of the comparables (i.e., the final value is not lower than the lowest comp sale price and not higher than the highest comp sale price). Report this as a finding.
-            *   **Blank Field Check:** For each comparable, verify that the following fields are NOT blank or null: `Sale Price/Gross Liv. Area`, `Data Source(s)`, and `Verification Source(s)`. Report any comparables with missing data for these fields.
-            *   **Data Source Content:** For the `Data Source(s)` field, verify it contains a value (e.g., 'MLS# 12345') or at least the word 'Unknown'. Report if it's blank.
-            *   **Financing Concessions:** If a comp has concessions (e.g., '$5,000'), the `Sale or Financing Concessions Adjustment` should be negative. If concessions are 'None' or '0', adjustment should be 0 or null.
-            *   **Date of Sale / Time:** 
-                *   Check if `Date of Sale` is > 12 months from Effective Date.
-                *   If `Date of Sale/Time Adjustment` is not 0, verify a comment explains market conditions.
-            *   **Location & View:** 
-                *   If Subject and Comp have the *same* rating (e.g., both "N;Res"), adjustment must be 0.
-                *   If Comp is Superior to Subject -> Adjustment should be Negative.
-                *   If Comp is Inferior to Subject -> Adjustment should be Positive.
-            *   **Design, Quality, Condition:**
-                *   Consistency Check: If Comp 1 and Comp 2 have the same rating difference vs Subject (e.g., Subject Q4, Comp 1 Q3, Comp 2 Q3), they should have the same adjustment.
-                *   Directional Check: Superior Comp -> Negative Adj; Inferior Comp -> Positive Adj.
-            *   **GLA Adjustment:**
-                *   Calculate `GLA Difference` = Subject GLA - Comp GLA.
-                *   If `GLA Difference` is positive (Subject is larger), adjustment should be Positive.
-                *   If `GLA Difference` is negative (Subject is smaller), adjustment should be Negative.
-                *   Calculate `Adjustment Rate` = Adjustment / GLA Difference. Check if this rate is consistent across all comps (allow small rounding differences).
-            *   **Basement Adjustment:**
-                *   Compare Total Basement Area and Finished Area.
-                *   If Subject has more basement/finish -> Positive Adjustment.
-                *   If Subject has less -> Negative Adjustment.
-            *   **Net and Gross Adjustments:**
-                *   **Recalculate Net:** Sum all individual adjustments for each comp. Compare with extracted `Net Adjustment (Total)`. Report discrepancies.
-                *   **Recalculate Gross:** Sum absolute values of adjustments.
-                *   **Guidelines:** Flag if Net Adjustment > 15% of Sale Price. Flag if Gross Adjustment > 25% of Sale Price.
-            *   **Adjusted Sale Price:** 
-                *   Recalculate: `Sale Price` + `Net Adjustment`. Compare with extracted `Adjusted Sale Price of Comparable`.
+        1.  **Extract Data:** For the subject and each comparable, extract all fields listed below. Use `null` for blank/missing fields. Pay attention to negative signs for adjustments.
+            *   **Note:** You must also locate the "Indicated Value by Sales Comparison Approach" (typically found below the sales grid) to perform the value analysis checks.
+        2.  **Perform Detailed Validation and Analysis (Apply these rules):**
+            *   **1. Proximity:** Verify if "Proximity to Subject" for all comparables is within 1 mile.
+            *   **2. Value Analysis:** 
+                *   Check if the "Indicated Value by Sales Comparison Approach" is bracketed by (i.e., between) the highest and lowest "Adjusted Sale Price of Comparable".
+                *   Check if the "Indicated Value by Sales Comparison Approach" is more than 25% higher than the unadjusted "Sale Price" of any comparable. (Note: If it is within 25%, it is acceptable).
+            *   **3. Required Fields:** Verify that "Sale Price/Gross Liv. Area", "Data Source(s)", and "Verification Source(s)" have values for all comparables.
+            *   **4. Concessions:** If "Sale or Financing Concessions" has a positive value, the "Sale or Financing Concessions Adjustment" must be negative. If it is 0/None, the adjustment should be 0.
+            *   **5. Date of Sale:** 
+                *   Verify if "Date of Sale/Time" is within 1 year of the effective date.
+                *   Check if the "Date of Sale/Time" is greater than the subject's "Date of Contract".
+                *   If "Date of Sale/Time Adjustment" is present (not 0), verify that a comment and graph are present in the report explaining it.
+            *   **6-22. Adjustment Consistency:** For each of the following features, check if the adjustment direction is correct based on the comparison between Subject and Comparable.
+                *   **Rule:** If Comparable is Superior to Subject -> Adjustment should be Negative. If Comparable is Inferior -> Adjustment should be Positive. If Equal -> Adjustment should be 0.
+                *   **Features:** "Location", "Leasehold/Fee Simple", "Site", "View", "Design (Style)", "Quality of Construction", "Actual Age", "Condition", "Bdrms", "Baths", "Gross Living Area", "Basement & Finished Rooms Below Grade", "Functional Utility", "Heating/Cooling", "Energy Efficient Items", "Garage/Carport", "Porch/Patio/Deck".
+            *   **23-24. Calculations:**
+                *   Recalculate "Net Adjustment (Total)" and compare with the extracted value.
+                *   Recalculate "Adjusted Sale Price of Comparable" and compare with the extracted value.
 
-        3.  **Report All Findings:** In the `"details"` array, report the outcome of each validation check. For inconsistencies, clearly describe the discrepancy (e.g., "Comp 1 GLA adjustment is positive but Comp is larger than Subject").
+        3.  **Report Findings:** In the `"details"` array, report the outcome of each check.
 
         **Fields to Extract for Subject and each Comparable:**
         {json.dumps(fields_to_extract, indent=2)}
@@ -990,10 +982,9 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
             "adjustment_analysis": {{
                 "summary": "Adjustments are generally consistent, but Comp 1 has a calculation error.",
                 "details": [
-                    "Sale Price Bracketing: Passed. Value is within range.",
-                    "GLA Adjustment: Consistent. A rate of $50/sq. ft. was applied across all comparables.",
-                    "Net/Gross Adjustments: Failed. Comp 1 Net Adjustment exceeds 15%.",
-                    "Adjusted Sale Price: Failed. Comp 1 Adjusted Price calculation is off by $100."
+                    "Proximity: Passed. All comps within 1 mile.",
+                    "Value Analysis: Passed. Indicated value is bracketed by adjusted sale prices.",
+                    "Adjustment Consistency: Failed. Comp 1 Location adjustment is positive but Comp is Superior."
                 ]
             }}
         }}
@@ -1161,6 +1152,61 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
             "analysis_summary": "The Gross Living Area (GLA) is consistently reported as 1,850 sq. ft. in both the Improvements section and the Sales Comparison Approach grid. No discrepancies were found."
         }}
         """
+    elif section_name.lower() == 'all_in_one_check':
+        prompt = f"""
+        You are an expert AI assistant for real estate appraisal quality control. Your task is to perform a comprehensive accuracy and consistency check on the entire appraisal report based on the detailed rules provided below.
+
+        **Output Format:**
+        Your output must be a single, valid JSON object with two top-level keys:
+        1.  `"summary"`: A high-level summary of your findings, mentioning the number of issues found.
+        2.  `"checks"`: A JSON array of objects. Each object represents one specific check you performed and must have the following four keys:
+            *   `"section"`: The category of the check (e.g., "Subject Data: Address", "Value Analysis: Value Bracketing", "Sales Comparison: Proximity").
+            *   `"status"`: The result of the check (e.g. 'Passed', 'Failed').
+            *   `"values"`: The specific data values you extracted and compared from the report. If no specific values apply, use `null`.
+            *   `"comment"`: A brief explanation of the finding, especially for any issues.
+
+        **Comprehensive Check Rules:**
+        For each point below, perform the check and generate a corresponding object for the "checks" array in your JSON output.
+        
+        1.  **Sales Comparison Approach Details:**
+            a.  **Proximity:** Check if all comparables are within 1 mile of the subject.
+            b.  **Value Range:** Check if the 'Indicated Value by Sales Comparison Approach' is within the range of the unadjusted sale prices of the comparables. Also, check if the 'Indicated Value' is more than 10% higher than the lowest unadjusted sale price.
+            c.  **Required Fields:** Verify that 'Sale Price/Gross Liv. Area', 'Data Source(s)', and 'Verification Source(s)' have values for all comparables.
+            d.  **Concessions:** If 'Sales or Financing Concessions' has a positive value, the adjustment should be negative, and vice versa.
+            e.  **Sale Date:** Verify 'Date of Sale/Time' is after the contract date and within the last 1 year. If time adjustments are present, check for a corresponding comment and graph.
+            f.  **Adjustments (Location, Leasehold):** Check 'Location' and 'Leasehold/Fee Simple' adjustments for consistency and logic.
+            g.  **Site Adjustment:** If a comparable's site is larger than the subject's, the adjustment should be negative. If smaller, it should be positive.
+            h.  **Adjustments (View, Design):** Check 'View' and 'Design (Style)' adjustments for consistency.
+            i.  **Adjustments (Quality, Age, Condition):** Check 'Quality of Construction', 'Actual Age', and 'Condition' adjustments for consistency.
+            j.  **Adjustments (Rooms):** Check 'Bdrms.' and 'Baths' adjustments for consistency.
+            k.  **Adjustments (Other Features):** Check adjustments for 'Basement & Finished', 'Functional Utility', 'Heating/Cooling', 'Energy Efficient Items', 'Garage/Carport', 'Porch/Patio/Deck' for consistency.
+            l.  **Calculations:** Verify the 'Net Adjustment (Total)' and 'Adjusted Sale Price of Comparables' calculations.
+
+        **Example JSON Output:**
+        {{
+            "summary": "The comprehensive check identified 2 inconsistencies related to GLA and a missing page. All other major points are consistent.",
+            "checks": [
+                {{
+                    "section": "Subject Data: Address",
+                    "status": "Consistent",
+                    "values": "123 Main St (All sections)",
+                    "comment": "The subject address is identical across all sections of the report."
+                }},
+                {{
+                    "section": "Subject Data: GLA",
+                    "status": "Inconsistent",
+                    "values": "Improvements: 1850 sqft, Sales Grid: 1860 sqft",
+                    "comment": "The Gross Living Area differs between the Improvements section and the Sales Comparison Grid."
+                }},
+                {{
+                    "section": "Page Integrity: SCOPE OF WORK",
+                    "status": "Missing",
+                    "values": null,
+                    "comment": "The SCOPE OF WORK section was not found in the document."
+                }}
+            ]
+        }}
+        """
     elif section_name.lower() == 'state_requirement':
         # This is a two-step process. First, we need to get the state.
         # We will make a preliminary, quick call to get only the state from the subject section.
@@ -1180,7 +1226,7 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
 
             state_response = await asyncio.to_thread(
                 client.models.generate_content,
-                model="gemini-2.5-flash-lite",
+                model="gemini-2.5-flash",
                 contents=[prelim_file, state_prompt],
             )
             state_data = json.loads(state_response.text.strip().lstrip("```json").rstrip("```"))
@@ -2030,7 +2076,7 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
             try:
                 response = await asyncio.to_thread(
                     client.models.generate_content,
-                    model="gemini-2.5-flash-lite",
+                    model="gemini-2.5-flash",
                     contents=[*uploaded_files_for_prompt, prompt],
                 )
                 break

@@ -1,4 +1,4 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404, HttpResponse
 from django.core.files.storage import FileSystemStorage
 from .services import extract_fields_from_pdf, FIELD_SECTIONS, SUBJECT_FIELDS
 from django.contrib.auth import login, logout, authenticate
@@ -7,6 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib import messages
 from .forms import SignUpForm, UpdateFileReviewForm
+from .models import ExtractedData
 from .utils import _extract_from_html_file
 from asgiref.sync import sync_to_async
 from .comparison import compare_data_sets, compare_1004d, compare_revised_vs_old
@@ -16,6 +17,24 @@ from django.http import JsonResponse
 import re
 import asyncio
 import json
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+import csv
+
+def _get_user_extraction_stats(user):
+    """Helper function to calculate extraction statistics for a user."""
+    all_user_extractions = list(ExtractedData.objects.filter(user=user))
+    total_extractions = len(all_user_extractions)
+    successful_extractions = sum(1 for item in all_user_extractions if 'error' not in item.data)
+    
+    success_rate = 0
+    if total_extractions > 0:
+        success_rate = round((successful_extractions / total_extractions) * 100)
+
+    return {
+        'total_extractions': total_extractions,
+        'successful_extractions': successful_extractions,
+        'success_rate': success_rate,
+    }
 
 def register_view(request):
     if request.method == 'POST':
@@ -53,6 +72,9 @@ def logout_view(request):
     logout(request)
     messages.success(request, "You have been successfully logged out.")
     return redirect('login')
+
+def contact_us_view(request):
+    return render(request, 'contact_us.html')
 
 # The view to handle the initial PDF upload
 @login_required
@@ -100,6 +122,9 @@ async def upload_pdf(request):
             if 'error' not in extracted_engagement_data:
                 engagement_data = {'addendum': extracted_engagement_data}
 
+        # --- Calculate Extraction Statistics ---
+        stats = await sync_to_async(_get_user_extraction_stats)(request.user)
+
         # Extract base information to show in the popup
         base_info = await extract_fields_from_pdf(pdf_path, 'base_info')
 
@@ -119,7 +144,8 @@ async def upload_pdf(request):
             'base_info': base_info, 
             'html_data': html_data,
             'purchase_data': purchase_data,
-            'engagement_data': engagement_data
+            'engagement_data': engagement_data,
+            'stats': stats
         }
         return await sync_to_async(render)(request, 'home.html', context)
 
@@ -209,6 +235,9 @@ async def update_file_review_process_view(request):
                         if 'error' not in extracted_engagement_data:
                             engagement_data = {'addendum': extracted_engagement_data}
 
+            # --- Calculate Extraction Statistics ---
+            stats = await sync_to_async(_get_user_extraction_stats)(request.user)
+
             # Extract base info from the revised report for the dashboard display
             base_info = await extract_fields_from_pdf(revised_path, 'base_info')
 
@@ -227,18 +256,9 @@ async def update_file_review_process_view(request):
                 'html_data': html_data,
                 'purchase_data': purchase_data,
                 'engagement_data': engagement_data,
+                'stats': stats
             }
             return await sync_to_async(render)(request, 'update_file_review_dashboard.html', context)
-
-            # Import here to avoid circular dependency
-            comparison_results = await compare_revised_vs_old(revised_path, old_path, optional_files)
-
-            context = {
-                'results': comparison_results,
-                'revised_filename': revised_filename,
-                'old_filename': old_filename
-            }
-            return await sync_to_async(render)(request, 'update_file_review_results.html', context)
     return await sync_to_async(redirect)('update_file_review_upload')
 
 @login_required
@@ -285,6 +305,9 @@ async def d1004_file_review_process_view(request):
             purchase_path = await sync_to_async(fs.path)(purchase_filename)
             purchase_data = await extract_fields_from_pdf(purchase_path, 'contract')
 
+        # --- Calculate Extraction Statistics ---
+        stats = await sync_to_async(_get_user_extraction_stats)(request.user)
+
         # Extract base info from the original report for the dashboard display
         base_info = await extract_fields_from_pdf(original_pdf_path, 'base_info')
 
@@ -303,6 +326,7 @@ async def d1004_file_review_process_view(request):
             'sections': sections_for_template,
             'html_data': html_data,
             'purchase_data': purchase_data,
+            'stats': stats
         }
         return await sync_to_async(render)(request, 'd1004_file_review_dashboard.html', context)
 
@@ -848,7 +872,7 @@ async def extract_section(request, filename, section_name):
                 "My research _____ reveal any prior sales or transfers of the subject property for the three years prior to the effective date of this appraisal.(did/did not)",
                 "Data Source(s) for subject property research",
                 "My research ______ reveal any prior sales or transfers of the comparable sales for the year prior to the date of sale of the comparable sale.(did/did not)",
-                "Data Source(s_for_comparable_sales_research)", # Adjusted key from services.py
+                "Data Source(s) for comparable sales research", # Adjusted key from services.py
                 "Analysis of prior sale or transfer history of the subject property and comparable sales",
             ]
             missing_fields = [field for field in required_fields if is_empty(extracted_data.get(field))]
@@ -893,6 +917,29 @@ async def extract_section(request, filename, section_name):
                 extracted_data['backend_validation_list'] = validations
         # --- End of Sale History Validation ---
         
+        # --- Save Extracted Data and Validations to DB ---
+        validation_info = {}
+        if 'backend_validation' in extracted_data:
+            validation_info['backend_validation'] = extracted_data['backend_validation']
+        if 'backend_validation_list' in extracted_data:
+            validation_info['backend_validation_list'] = extracted_data['backend_validation_list']
+
+        # Capture AI-generated validations (often displayed on frontend)
+        if 'adu_validation' in extracted_data:
+            validation_info['adu_validation'] = extracted_data['adu_validation']
+        if 'adjustment_analysis' in extracted_data:
+            validation_info['adjustment_analysis'] = extracted_data['adjustment_analysis']
+
+        await sync_to_async(ExtractedData.objects.update_or_create)(
+            user=request.user,
+            filename=filename,
+            section_name=section_name,
+            defaults={
+                'data': extracted_data,
+                'validation_results': validation_info
+            }
+        )
+
         # --- FHA Case Detection for Subject Section ---
         is_fha_case = False
         is_rental_form = False
@@ -967,6 +1014,105 @@ def generate_report(request):
             return JsonResponse({'status': 'error', 'message': 'Could not write to report file.'}, status=500)
 
     return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)
+
+@login_required
+def history_view(request):
+    """
+    Displays a list of all extracted sections saved by the current user.
+    """
+    query = request.GET.get('q')
+    extracted_data_list = ExtractedData.objects.filter(user=request.user)
+
+    if query:
+        extracted_data_list = extracted_data_list.filter(filename__icontains=query)
+
+    extracted_data_list = extracted_data_list.order_by('-updated_at')
+
+    paginator = Paginator(extracted_data_list, 10)  # Show 10 records per page
+    page = request.GET.get('page')
+    try:
+        extracted_data_list = paginator.page(page)
+    except PageNotAnInteger:
+        extracted_data_list = paginator.page(1)
+    except EmptyPage:
+        extracted_data_list = paginator.page(paginator.num_pages)
+
+    return render(request, 'history.html', {'extracted_data_list': extracted_data_list, 'query': query})
+
+@login_required
+def history_detail_view(request, pk):
+    """
+    Displays the details of a specific extracted data record, including raw JSON.
+    """
+    extracted_data = get_object_or_404(ExtractedData, pk=pk, user=request.user)
+    formatted_data = json.dumps(extracted_data.data, indent=4)
+    formatted_validation = json.dumps(extracted_data.validation_results, indent=4) if extracted_data.validation_results else "{}"
+    
+    return render(request, 'history_detail.html', {
+        'extracted_data': extracted_data,
+        'formatted_data': formatted_data,
+        'formatted_validation': formatted_validation
+    })
+
+@login_required
+def export_history_csv(request):
+    """
+    Exports the filtered history list to a CSV file.
+    """
+    query = request.GET.get('q')
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+
+    extracted_data_list = ExtractedData.objects.filter(user=request.user)
+
+    if query:
+        extracted_data_list = extracted_data_list.filter(filename__icontains=query)
+    if start_date:
+        extracted_data_list = extracted_data_list.filter(updated_at__date__gte=start_date)
+    if end_date:
+        extracted_data_list = extracted_data_list.filter(updated_at__date__lte=end_date)
+    
+    extracted_data_list = extracted_data_list.order_by('-updated_at')
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="extraction_history.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(['Filename', 'Section', 'Status', 'Created At', 'Last Updated'])
+
+    for item in extracted_data_list:
+        status = 'Error' if item.data.get('error') else 'Success'
+        writer.writerow([item.filename, item.section_name, status, item.created_at, item.updated_at])
+
+    return response
+
+@login_required
+def bulk_delete_history(request):
+    """
+    Deletes multiple ExtractedData items for the current user.
+    """
+    if request.method == 'POST':
+        item_ids = request.POST.getlist('selected_items')
+        if item_ids:
+            deleted_count, _ = ExtractedData.objects.filter(
+                id__in=item_ids, 
+                user=request.user
+            ).delete()
+            messages.success(request, f"{deleted_count} history items deleted.")
+        else:
+            messages.warning(request, "No items selected for deletion.")
+    return redirect('history')
+
+@login_required
+def delete_history_item(request, pk):
+    """
+    Deletes a specific ExtractedData item for the current user.
+    """
+    if request.method == 'POST':
+        history_item = get_object_or_404(ExtractedData, pk=pk, user=request.user)
+        history_item.delete()
+        messages.success(request, f"History item for '{history_item.filename} - {history_item.section_name}' has been deleted.")
+    return redirect('history')
 
 @login_required
 async def get_section_data_api(request, filename, section_name):

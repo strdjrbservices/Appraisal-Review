@@ -1,0 +1,151 @@
+<!-- Splash Screen Component -->
+<!-- Include this file in your base layout (e.g., base.html) -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800;400&display=swap');
+
+        #splash-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 9999;
+            background: radial-gradient(circle at center, #ffffff, #e2e8f0);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Montserrat', sans-serif;
+            overflow: hidden;
+        }
+
+        .logo-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        /* 3D Bounce Icon */
+        .icon-container {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            margin-bottom: 20px;
+            filter: drop-shadow(0 10px 15px rgba(0,0,0,0.1));
+            animation: bounceIn 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+        }
+
+        @keyframes bounceIn {
+            0% { transform: translateY(-200px) scale(0.3); opacity: 0; }
+            60% { transform: translateY(10px) scale(1.1); opacity: 1; }
+            100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
+        /* Icon SVG Styling */
+        .house-svg {
+            fill: #1a3636;
+            width: 100%;
+            height: 100%;
+        }
+
+        .checkmark {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            width: 40px;
+            height: 40px;
+            fill: #22c55e;
+            transform: scale(0);
+            animation: popCheck 0.4s 1s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes popCheck {
+            to { transform: scale(1); }
+        }
+
+        /* Staggered Letter Animation */
+        .brand-name {
+            font-size: 64px;
+            font-weight: 800;
+            color: #1a3636;
+            display: flex;
+            gap: 2px;
+        }
+
+        .letter {
+            display: inline-block;
+            opacity: 0;
+            transform: translateY(20px) rotateX(-90deg);
+            animation: letterReveal 0.5s forwards;
+        }
+
+        @keyframes letterReveal {
+            to {
+                opacity: 1;
+                transform: translateY(0) rotateX(0);
+            }
+        }
+
+        .tagline {
+            font-size: 18px;
+            color: #64748b;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            margin-top: 10px;
+            opacity: 0;
+            animation: fadeIn 1s 1.8s forwards;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+    </style>
+
+<div id="splash-overlay">
+    <div class="logo-wrapper">
+        <div class="icon-container">
+            <svg viewBox="0 0 100 100" class="house-svg">
+                <!-- Combined House/Magnifying Glass Shape -->
+                <path d="M50 15 L85 45 L85 85 C85 88 82 90 78 90 L22 90 C18 90 15 88 15 85 L15 45 L50 15 Z M42 55 H58 V75 H42 V55 Z" />
+                <rect x="5" y="80" width="12" height="30" transform="rotate(45 10 90)" rx="4" />
+            </svg>
+            <svg class="checkmark" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" fill="white" />
+                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="#22c55e"/>
+            </svg>
+        </div>
+
+        <div class="brand-name" id="brandName">
+            <!-- Letters will be injected by JS for staggered animation -->
+        </div>
+
+        <div class="tagline">Trusted Home Solutions</div>
+    </div>
+</div>
+
+    <script>
+        const text = "DJRB Services";
+        const container = document.getElementById('brandName');
+
+        // Split text into individual letters for the staggered effect
+        text.split('').forEach((char, i) => {
+            const span = document.createElement('span');
+            span.textContent = char === " " ? "\u00A0" : char;
+            span.className = 'letter';
+            // Start letters after icon bounce (1s) + increment per letter
+            span.style.animationDelay = `${1 + (i * 0.08)}s`;
+            container.appendChild(span);
+        });
+
+        // Fade out and remove splash screen after animation
+        setTimeout(() => {
+            const overlay = document.getElementById('splash-overlay');
+            if (overlay) {
+                overlay.style.transition = 'opacity 0.5s ease';
+                overlay.style.opacity = '0';
+                setTimeout(() => overlay.remove(), 500);
+            }
+        }, 3500);
+    </script>

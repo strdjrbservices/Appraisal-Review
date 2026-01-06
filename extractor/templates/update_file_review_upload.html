@@ -1,34 +1,111 @@
 {% extends 'base.html' %}
 
 {% block title %}Update File Review{% endblock %}
-
+{% block extra_css %} 
+<style>
+    .tab-container {
+        width: 100%;
+        /* border: 1px solid var(--border-color); */
+        background-color: #fff;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .tab-header {
+        display: flex;
+        background-color: #f9fafb;
+        padding: 5px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .nav-tabs {
+        display: flex; 
+        justify-content: center; 
+        gap: 10px; 
+        padding: 15px 0;
+        background: #f8f9fa;
+        border-bottom: 1px solid #e2e2e2;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .tab-link {
+        text-decoration: none;
+        color: #4b5563;
+        font-weight: 600;
+        font-size: 15px;
+        padding: 8px 16px;
+        border-radius: 20px;
+        transition: all 0.2s ease;
+    }
+    .tab-link:hover {
+        background-color: #e5e7eb;
+        color: #111827;
+    }
+    .tab-link.active {
+        color: #0d6efd;
+        background-color: #e7f1ff;
+        box-shadow: 0 2px 4px rgba(13, 110, 253, 0.1);
+    }
+    .tab-content {
+        display: none;
+        padding: 25px;
+        animation: fadeIn 0.5s;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    .tab-content.active {
+        display: block;
+    }
+    .tab-content h2 {
+        margin-top: 0;
+        color: var(--text-primary);
+    }
+    .tab-content p {
+        color: #6b7280;
+        margin-bottom: 1.5rem;
+    } 
+</style>
+{% endblock %}
 {% block content %}
 <div class="header-logout">
     {% if user.is_authenticated %}
         Welcome, {{ user.username }} | <a href="{% url 'logout' %}">Logout</a>
     {% endif %}
 </div>
-
-<form id="upload-form" action="{% url 'update_file_review_process' %}" method="post" enctype="multipart/form-data">
-    <h2>Update File Review</h2>
-    <p style="margin-top:-1rem; margin-bottom: 2rem; color: #6b7280;">Upload a revised report and the original (old) report to compare key differences.</p>
+<div class="tab-container" style="box-shadow: none; scrollbar-width: none; overflow-x: hidden; overflow-y: hidden; ">
+    <div class="nav-tabs">
+        <!-- ACTIVE TAB -->
+        <a href="{% url 'upload_pdf' %}" class="tab-link" target="_blank">
+        Full File Review
+        </a>
+        <a href="{% url 'update_file_review_upload' %}" class="tab-link  active" target="_blank">
+        Update File Review
+        </a>
+        <a href="{% url 'd1004_file_review_upload' %}" class="tab-link" target="_blank">
+        1004D File Review
+        </a>
+    </div>
+</div>
+<form id="upload-form-full" style="background: #ffffff;margin-top: -20px;"  action="{% url 'update_file_review_process' %}" method="post" enctype="multipart/form-data">
+    <h2 style="display: flex; justify-content: center; padding-top: 20px ; align-items: center;">Update File Reviewer</h2>
+    <p style="display: flex; justify-content: center; align-items: center;">Upload a revised report and the original (old) report to compare key differences.</p>
     {% csrf_token %}
 
-    <div class="file-upload-container" style="grid-template-columns: 1fr 1fr;">
+    <div class="upload-grid-container" style="margin-left: auto ; margin-right: auto ; width :1100px; display: flex; justify-content: center; align-items: center;">
         <div id="file-drop-zone-revised" class="file-drop-zone required-zone">
-            <p class="drop-zone-text">Revised Report (Required)<br>Drag & Drop or <span class="browse-link">browse</span></p>
+            <p class="drop-zone-text"><strong>Revised Report (Required)</strong><br>Drag & Drop or <span class="browse-link">browse</span></p>
             <span id="file-name-revised" class="file-name"></span>
         </div>
         <div id="file-drop-zone-old" class="file-drop-zone required-zone">
-            <p class="drop-zone-text">Old Report (Required)<br>Drag & Drop or <span class="browse-link">browse</span></p>
+            <p class="drop-zone-text"><strong>Report (Required)</strong><br>Drag & Drop or <span class="browse-link">browse</span></p>
             <span id="file-name-old" class="file-name"></span>
         </div>
         <div id="file-drop-zone-html" class="file-drop-zone optional-zone">
-            <p class="drop-zone-text">Order Form HTML (Optional)<br>Drag & Drop or <span class="browse-link">browse</span></p>
+            <p class="drop-zone-text"><strong>Order Form HTML (Optional)</strong><br>Drag & Drop or <span class="browse-link">browse</span></p>
             <span id="file-name-html" class="file-name"></span>
         </div>
         <div id="file-drop-zone-purchase" class="file-drop-zone optional-zone">
-            <p class="drop-zone-text">Purchase Copy (Optional)<br>Drag & Drop or <span class="browse-link">browse</span></p>
+            <p class="drop-zone-text"><strong>Purchase Copy (Optional)</strong><br>Drag & Drop or <span class="browse-link">browse</span></p>
             <span id="file-name-purchase" class="file-name"></span>
         </div>
     </div>
@@ -39,9 +116,10 @@
     <input id="purchase_copy_file" type="file" name="purchase_copy_file" accept="application/pdf">
 
     <div class="button-container">
-        <button type="submit" class="btn" style="flex-grow: 1;">Run Review</button>
+        <button type="submit" class="btn" style="margin: 20px auto; width: 100%; max-width: 400px; display:flex; justify-content: center; align-items: center;">Run Review</button>
     </div>
 </form>
+</div>
 {% endblock %}
 
 {% block extra_js %}

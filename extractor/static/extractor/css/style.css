@@ -200,18 +200,7 @@ input[type="file"] {
 }
 
 /* Styles from upload.html */
-.upload-grid-container {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    display: flex;
-    /* flex-direction: column; */
-    justify-content: center;
-    align-items: center;
-    gap: 1.5rem;
-    height: 300px !important;
-    width: 100%;
-    margin-bottom: 1.5rem;
-}
+
 
 #upload-form button[type="submit"] {
     background-color: #007bff;
@@ -941,3 +930,20 @@ tbody tr:last-child th, tbody tr:last-child td { border-bottom: none; }
   scrollbar-width: none !important; /* Firefox */
   -ms-overflow-style: none !important; /* IE and Edge */
 }
+
+.stats-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        text-align: center;
+    }
+    .stat-item .stat-value {
+        font-size: 2rem;
+        font-weight: bold;
+        color: var(--text-primary);
+        display: block;
+    }
+    .stat-item .stat-label {
+        font-size: 0.9em;
+        color: #6b7280;
+    }

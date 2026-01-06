@@ -4,22 +4,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
     <link rel="stylesheet" href="{% static 'extractor\css\style.css' %}">
+    <link rel="icon" type="image/png" href="{% static 'extractor/img/logo.png' %}">
     <title>Extraction Result: {{ section_title }}</title>
 </head>
 <body style="display: flex; margin: 0; background-color: var(--primary-bg); color: var(--text-primary);">
     {% load dict_helpers %}
     <div class="sidebar">
         <div class="sidebar-header">
+            <div class="logo-container" style="text-align: center; margin-bottom: 15px;">
+                <a href="https://strdjrbservices.pythonanywhere.com/"><img src="{% static 'extractor/img/logo.png' %}" alt="Logo" style="max-width: 150px; height: auto;"></a>
+            </div>
             {% if user.is_authenticated %}
                 <p class="username">Welcome, {{ user.username }}</p>
                 <a href="{% url 'logout' %}" class="logout-link">Logout</a>
             {% endif %}
         </div>
-        
+
         <h3 style="margin-top:0;">Sections</h3>
         <ul>
-            {% for key, display_name in sections.items %} 
+            {% for key, display_name in sections.items %}
                 {% if key != 'additional_comments' %}
                 <li>
                     <a href="{% url 'extract_section' filename=filename section_name=key %}" class="section-link {% if key == section_key %}active{% endif %}">
@@ -48,11 +53,22 @@
             <button id="validate-btn" class="validate-button">Validate</button>
         </div>
         <div id="validation-container"></div>
-        
+
         {% comment %} Display backend validation messages if they exist {% endcomment %}
         {% if data.backend_validation %}
             <div class="validation-message validation-{{ data.backend_validation.status }}">
                 <strong>Backend Validation:</strong> {{ data.backend_validation.message }}
+            </div>
+        {% elif data.backend_validation_list %}
+            <div class="validation-container-list mb-3">
+                <h5 class="mb-2">Backend Validations:</h5>
+                <ul class="list-group">
+                {% for validation in data.backend_validation_list %}
+                    <li class="list-group-item list-group-item-{% if validation.status == 'error' %}danger{% elif validation.status == 'success' %}success{% else %}warning{% endif %}">
+                        {{ validation.message }}
+                    </li>
+                {% endfor %}
+                </ul>
             </div>
         {% endif %}
 
@@ -67,6 +83,41 @@
 
         {% if data.error %}
             <p class="error">Error: {{ data.error }}</p>
+        {% elif section_key == 'all_in_one_check' %}
+            <div class="custom-analysis-container" style="margin-top: 20px;">
+                <h3>Comprehensive Check Summary</h3>
+                <p class="custom-analysis-summary">{{ data.summary|default:"No summary provided." }}</p>
+
+                <h3 style="margin-top: 30px;">Detailed Checks</h3>
+                {% if data.checks %}
+                    <table class="findings-table" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Section</th>
+                                <th>Values</th>
+                                <th>Comment</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for check in data.checks %}
+                            <tr>
+                                <td>
+                                    {% with status_lower=check.status|lower %}
+                                    <span class="status-{{ status_lower }}">{{ check.status|default:"Info" }}</span>
+                                    {% endwith %}
+                                </td>
+                                <td class="finding-title">{{ check.section|default:"N/A" }}</td>
+                                <td class="finding-source">{{ check.values|default:"N/A" }}</td>
+                                <td class="check-details">{{ check.comment|default:"No comment." }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p>No specific checks were returned from the analysis.</p>
+                {% endif %}
+            </div>
         {% elif section_key == 'sales_grid' %}
             {% if show_revision_helper %}
                 <div class="revision-helper-card">
@@ -110,7 +161,7 @@
                         <td contenteditable="true" class="editable-value" data-field-name="{{ field }} - Subject">{{ subject_value|default_if_none:"" }}</td>
                         {% for comp in data.comparables %}
                             <td contenteditable="true" class="editable-value" data-field-name="{{ field }} - Comparable #{{ forloop.counter }}">
-                                {# Use the get_item filter to access the value by the field name #} 
+                                {# Use the get_item filter to access the value by the field name #}
                                 {{ comp|get_item:field|default_if_none:"" }}
                             </td>
                         {% endfor %}
@@ -470,7 +521,8 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
 4.  A room labeled 'kitchenette' should not have a stove; in this case, no health and safety comment is needed. However, if a kitchenette does contain a stove, escalate with a comment (permitted/health or safety).
 
     Escalation language: On page #, a room labeled as 'kitchenette' has a stove. Please advise.">ADU Criteria Check</button>
-                            <div class="common-prompt-btn-container"> 
+                            <button type="button" class="prompt-suggestion-btn" data-prompt="1. In sales history please check and validate as below :&#10;a.  The question &quot;research the sale or transfer history of the subject property and comparable sales. If not, explain&quot; should always be marked &quot;did&quot;&#10;b. for question &quot;any prior sales or transfers of the subject property for the three years prior to the effective date of this appraisal.&quot; if the checkmark is on did, then the Date of Prior Sale/Transfer of subject should have date within or same 3 years of &quot;as of&quot; date from reconcilation section and  Price of Prior Sale/Transfer should be present. If checkmark is on &quot;did not&quot; then any value present would be fine.&#10;c. for question &quot; any prior sales or transfers of the comparable sales for the year prior to the date of sale of the comparable sale..&quot; if the checkmark is on did, then the Date of Prior Sale/Transfer of respective comp should have date within or same as 1 years of   sale date which is &quot;S&quot; Date of Sale/Time&quot; in sales grid and  Price of Prior Sale/Transfer should be present. If checkmark is on &quot;did not&quot; then any value present would be fine.">Sales History check</button>
+                            <div class="common-prompt-btn-container">
                                 <button type="button" class="prompt-suggestion-btn" data-prompt="Please check and verify if below revision requests are addressed in the file.&#10;&#10;The date lease begins of rental comp# 3 is noted as Owner, please revise&#10;&#10;If addressed by comments, please verify if particular section is updated.&#10;&#10;If addressed, provide answer as revision and state corrected or not corrected. Keep it short.&#10;&#10;Below are extra points to confirm, don't address or treat as revision, just verify&#10;&#10;Also, please check if any checkboxes, or field are blank, if yes highlight in short&#10;&#10;consider below,&#10;&#10;if assignment type is refinance, then contract section should be blank, even checkboxes.&#10;&#10;If purchase, the appropriate field and checkboxes should be marked.&#10;&#10;In garage, check and validate according to checkboxes marked. &#10;&#10;Check if appraised value is matched at in total 4 locations.&#10;&#10;The signature date should be greater than effective date. Effective date is as of date.&#10;&#10;In signature page Company Name/AMC Name should include Fastapp&#10;&#10;Check for prior services, exposure comment, check is appraiser invoice is attached if yes need to remove.&#10;&#10;Please answer 1 per line not in paragraph">
                                     Common Prompt
                                 </button>
@@ -602,7 +654,7 @@ Also please confirm no duplicates.">Verify Comparable Address, Photo(Duplicates)
                     {% endfor %}
                 </tbody>
             </table>
-            <div class="custom-analysis-card" style="margin-top: 40px;">
+            <!-- <div class="custom-analysis-card" style="margin-top: 40px;">
                 <h3>Default Sale History Analysis</h3>
                 <p>Click the button below to run a default set of validation checks on the sale history data based on common requirements.</p>
                 <form action="{% url 'extract_section' filename=filename section_name='custom_analysis' %}" method="post" id="default-analysis-form">
@@ -615,7 +667,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                     </textarea>
                     <button type="submit" class="btn-submit" data-form-id="default-analysis-form">Run Default Analysis</button>
                 </form>
-            </div>
+            </div> -->
         {% elif section_key == 'rental_grid' %}
             {% if show_revision_helper %}
                 <div class="revision-helper-card">
@@ -848,23 +900,23 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                     <tr><td>Source of cost data</td><td contenteditable="true" class="editable-value" data-field-name="Source of cost data">{{ data|get_item:"Source of cost data"|default_if_none:"" }}</td></tr>
                     <tr><td>Quality rating from cost service</td><td contenteditable="true" class="editable-value" data-field-name="Quality rating from cost service">{{ data|get_item:"Quality rating from cost service"|default_if_none:"" }}</td></tr>
                     <tr><td>Effective date of cost data</td><td contenteditable="true" class="editable-value" data-field-name="Effective date of cost data">{{ data|get_item:"Effective date of cost data"|default_if_none:"" }}</td></tr>
-                    
+
                     <tr style="background-color: #f9fafb;"><td colspan="2" style="padding: 8px;"></td></tr>
 
                     <tr><td>Opinion of Site Value</td><td contenteditable="true" class="editable-value" data-field-name="Opinion of Site Value">{{ data|get_item:"Opinion of Site Value"|default_if_none:"" }}</td></tr>
-                    
+
                     <tr><td>ESTIMATED (REPRODUCTION / REPLACEMENT COST NEW)</td><td contenteditable="true" class="editable-value" data-field-name="ESTIMATED (REPRODUCTION / REPLACEMENT COST NEW)">{{ data|get_item:"ESTIMATED (REPRODUCTION / REPLACEMENT COST NEW)"|default_if_none:"" }}</td></tr>
-                    
+
                     <tr><td>Dwelling</td><td contenteditable="true" class="editable-value" data-field-name="Dwelling">{{ data|get_item:"Dwelling"|default_if_none:"" }}</td></tr>
                     <tr><td>Garage/Carport</td><td contenteditable="true" class="editable-value" data-field-name="Garage/Carport">{{ data|get_item:"Garage/Carport"|default_if_none:"" }}</td></tr>
                     <tr><td><strong>Total Estimate of Cost-New</strong></td><td contenteditable="true" class="editable-value" data-field-name="Total Estimate of Cost-New"><strong>{{ data|get_item:"Total Estimate of Cost-New"|default_if_none:"" }}</strong></td></tr>
-                    
+
                     <tr style="background-color: #f9fafb;"><td colspan="2" style="padding: 8px;"></td></tr>
 
                     <tr><td>Depreciation</td><td contenteditable="true" class="editable-value" data-field-name="Depreciation">{{ data|get_item:"Depreciation"|default_if_none:"" }}</td></tr>
                     <tr><td><strong>Depreciated Cost of Improvements</strong></td><td contenteditable="true" class="editable-value" data-field-name="Depreciated Cost of Improvements"><strong>{{ data|get_item:"Depreciated Cost of Improvements"|default_if_none:"" }}</strong></td></tr>
                     <tr><td>As-is Value of Site Improvements</td><td contenteditable="true" class="editable-value" data-field-name="As-is Value of Site Improvements">{{ data|get_item:"As-is Value of Site Improvements"|default_if_none:"" }}</td></tr>
-                    
+
                     <tr style="background-color: #f3f4f6;">
                         <td><strong>Indicated Value By Cost Approach</strong></td>
                         <td contenteditable="true" class="editable-value" data-field-name="Indicated Value By Cost Approach"><strong>{{ data|get_item:"Indicated Value By Cost Approach"|default_if_none:"" }}</strong></td>
@@ -997,7 +1049,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                         if (state) sessionStorage.setItem('subjectState', state);
                     }
                 });
-                
+
                 // Capture Lender/Client Address for cross-validation
                 const lenderAddress = getFieldValue('Address (Lender/Client)');
                 if (lenderAddress && lenderAddress !== '--' && lenderAddress !== 'null') {
@@ -1012,7 +1064,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                     const messageDiv = document.createElement('div');
                     messageDiv.classList.add('validation-message', 'validation-warning');
                     messageDiv.textContent = "⚠️ Warning: Assignment Type is 'Purchase Transaction'. Please ensure the 'Contract' section is filled out as required.";
-                    
+
                     // Create a link to the 'Contract' section
                     const contractLink = document.createElement('a');
                     contractLink.href = `{% url 'extract_section' filename=filename section_name='contract' %}`;
@@ -1031,7 +1083,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
 
                     const messageDiv = document.createElement('div');
                     messageDiv.classList.add('validation-message', 'validation-warning');
-                    
+
                     const contractLink = document.createElement('a');
                     contractLink.href = `{% url 'extract_section' filename=filename section_name='contract' %}`;
                     contractLink.textContent = "Contract section";
@@ -1193,7 +1245,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                     }
                     validationContainer.appendChild(messageDiv);
                 }
-                
+
                 // // Info message for Lender/Client validation
                 // if (sessionStorage.getItem('subjectLenderClient')) {
                 //     const messageDiv = document.createElement('div');
@@ -1208,7 +1260,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                     sessionStorage.setItem('isFhaCase', 'true');
                     const messageDiv = document.createElement('div');
                     messageDiv.classList.add('validation-message', 'validation-warning');
-                    
+
                     // Create a link to the custom analysis section that carries the FHA flag
                     const customAnalysisLink = document.createElement('a');
                     // Append ?fha=true to the URL
@@ -1221,7 +1273,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                     messageDiv.innerHTML = "ℹ️ FHA case detected. Please check FHA instructions in the ";
                     messageDiv.appendChild(customAnalysisLink);
                     messageDiv.innerHTML += ".";
-                    
+
                     validationContainer.appendChild(messageDiv);
                 }
 
@@ -1546,7 +1598,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                     validationContainer.appendChild(messageDiv);
                 }
                 {% endif %}
-                
+
                 {% if section_key == 'neighborhood' %}
                 // Validation for Neighborhood section percentages
                 const fieldsToSum = ['One-Unit', '2-4 Unit', 'Multi-Family', 'Commercial', 'Other'];
@@ -1638,7 +1690,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                     if (fieldCell && fieldCell.textContent.trim() === 'Neighborhood Boundaries') {
                         const valueCell = row.querySelector('td:last-child');
                         const valueText = valueCell.textContent.trim().toLowerCase();
-                        
+
                         const missingDirections = [];
                         if (!valueText.includes('north')) missingDirections.push('North');
                         if (!valueText.includes('south')) missingDirections.push('South');
@@ -1740,7 +1792,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                             messageDiv.innerHTML = `<strong>⚠️ CRITICAL WARNING: Zoning Description contains 'Agriculture'/'agr'. This is not acceptable.</strong>`;
                             validationContainer.appendChild(messageDiv);
                         }
-                        
+
                         // 4. Zoning Compliance validation
                         if (fieldName === 'Zoning Compliance') {
                             const complianceValue = value;
@@ -1903,14 +1955,14 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                         }
                     }
                 });
-                
+
                 if (femaHazardAreaValue && femaFloodZoneValue) {
                     const messageDiv = document.createElement('div');
                     messageDiv.classList.add('validation-message');
                     let isValid = false;
 
                     if (femaHazardAreaValue === 'yes' && (femaFloodZoneValue === 'A' || femaFloodZoneValue === 'AE')) {
-                        isValid = true; 
+                        isValid = true;
                     } else if (femaHazardAreaValue === 'no' && (femaFloodZoneValue === 'X' || femaFloodZoneValue === 'X500')) {
                         isValid = true;
                     }
@@ -1918,7 +1970,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                     if (isValid) {
                         messageDiv.classList.add('validation-success');
                         messageDiv.textContent = `✅ Validation successful: FEMA Flood Zone '${femaFloodZoneValue}' is consistent with Special Flood Hazard Area being '${femaHazardAreaValue}'.`;
-                    } else { 
+                    } else {
                         messageDiv.classList.add('validation-error');
                         messageDiv.textContent = `⚠️ Validation warning: FEMA Flood Zone '${femaFloodZoneValue}' is inconsistent. It should be 'A' or 'AE' if Hazard Area is 'Yes', or 'X' or 'X500' if Hazard Area is 'No'.`;
                     }
@@ -2086,7 +2138,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                     const validFuels = ['gas', 'oil', 'electric'];
                     // Split by common delimiters like slash, comma, or space
                     const fuelParts = fuelValue.toLowerCase().split(/[\s,\/]+/);
-                    
+
                     // Check if every part is a valid fuel type
                     const allPartsValid = fuelParts.every(part => validFuels.includes(part.trim()));
 
@@ -2532,7 +2584,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                 } else {
                     addValidationMessage('warning', "ℹ️ Info: Could not find 'Effective Date of Value' from Reconciliation section to compare. Please visit the Reconciliation section first.");
                 }
-                
+
                 // 5. LENDER/CLIENT Name should always have "fastapp"
                 const lenderClientName = getFieldValue('LENDER/CLIENT Name');
                 if (lenderClientName) {
@@ -2546,7 +2598,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
 
                 // Validation for Lender/Client consistency
                 const subjectState = sessionStorage.getItem('subjectState');
-                
+
                 const subjectLenderClient = sessionStorage.getItem('subjectLenderClient');
                 if (subjectLenderClient) {
                     let certificationLenderClientCompanyName = null;
@@ -2924,7 +2976,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                 // Validation for GLA Consistency custom analysis
                 const customPrompt = `{{ custom_prompt|escapejs }}`.toLowerCase().replace(/\s+/g, ' ').trim();
                 const analysisSummary = `{{ data.analysis_summary|escapejs }}`.toLowerCase();
-                
+
                 const isPrompt = (text) => customPrompt.includes(text.toLowerCase());
 
                 if (isPrompt("discrepancies in the gross living area") && analysisSummary) {
@@ -3039,7 +3091,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                 if (isPrompt("please check and verify if below revision requests are addressed") && analysisSummary) {
                     const messageDiv = document.createElement('div');
                     messageDiv.classList.add('validation-message');
-                    
+
                     if (analysisSummary.includes("not corrected") || analysisSummary.includes("not addressed") || analysisSummary.includes("missing") || analysisSummary.includes("blank") || analysisSummary.includes("inconsistent")) {
                          messageDiv.classList.add('validation-error');
                          messageDiv.textContent = '⚠️ Validation Failed: The analysis indicates that some revision requests or checks were not addressed or failed. Please review the findings.';
@@ -3049,6 +3101,24 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                     } else {
                         messageDiv.classList.add('validation-warning');
                         messageDiv.textContent = '❓ Validation Inconclusive: Please review the analysis summary manually.';
+                    }
+                    validationContainer.appendChild(messageDiv);
+                }
+
+                // Validation for Sales History Check
+                if (isPrompt("in sales history please check and validate as below") && !isEmpty(analysisSummary)) {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.classList.add('validation-message');
+
+                    if (analysisSummary.includes("not marked 'did'") || analysisSummary.includes("incorrect") || analysisSummary.includes("discrepancy") || analysisSummary.includes("missing") || analysisSummary.includes("failed") || analysisSummary.includes("does not match")) {
+                         messageDiv.classList.add('validation-error');
+                         messageDiv.textContent = '⚠️ Validation Failed: The analysis summary indicates issues with the Sales History validation. Please review the findings.';
+                    } else if (analysisSummary.includes("correctly marked") || analysisSummary.includes("consistent") || analysisSummary.includes("verified") || analysisSummary.includes("passed") || analysisSummary.includes("no issues")) {
+                        messageDiv.classList.add('validation-success');
+                        messageDiv.textContent = '✅ Validation Passed: The Sales History checks passed.';
+                    } else {
+                        messageDiv.classList.add('validation-warning');
+                        messageDiv.textContent = '❓ Validation Inconclusive: Please review the Sales History analysis summary manually.';
                     }
                     validationContainer.appendChild(messageDiv);
                 }
@@ -3093,6 +3163,10 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                 const getResearchFieldValue = (fieldName) => {
                     const row = Array.from(researchAndAnalysisTable.querySelectorAll('tbody tr')).find(r => r.querySelector('td:first-child')?.textContent.trim().startsWith(fieldName));
                     return row ? row.querySelector('td:last-child')?.textContent.trim() : null;
+                };
+
+                const getGridRow = (fieldName) => {
+                    return Array.from(gridTable.querySelectorAll('tbody tr')).find(r => r.querySelector('td:first-child')?.textContent.trim() === fieldName);
                 };
 
                 const isEmpty = (val) => !val || val === '--' || val === 'null';
@@ -3637,7 +3711,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                     }
                 }
             });
-            
+
             // Capture Lender/Client Address for cross-validation
             const lenderAddress = getFieldValue(tableRows, 'Address (Lender/Client)');
             if (!isEmpty(lenderAddress)) {
@@ -3650,7 +3724,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
 
                 const messageDiv = document.createElement('div');
                 messageDiv.classList.add('validation-message', 'validation-warning');
-                
+
                 // Create a link to the 'Contract' section
                 const contractLink = document.createElement('a');
                 contractLink.href = `{% url 'extract_section' filename=filename section_name='contract' %}`;
@@ -3668,7 +3742,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
 
                 const messageDiv = document.createElement('div');
                 messageDiv.classList.add('validation-message', 'validation-warning');
-                
+
                 const contractLink = document.createElement('a');
                 contractLink.href = `{% url 'extract_section' filename=filename section_name='contract' %}`;
                 contractLink.textContent = "Contract section";
@@ -3830,7 +3904,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
             } else {
                 addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'Offered for Sale in Last 12 Months' must be 'Yes' or 'No'. It is currently '${offeredForSaleValue || 'blank'}'.`);
             }
-            
+
             // --- New "Unpaid OK" Lender Validation ---
             const unpaidOkLenders = [
                 'prmg', 'paramount residential mortgage group',
@@ -3865,7 +3939,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
             const fhaValue = getFieldValue(tableRows, 'FHA');
             if (!isEmpty(fhaValue)) {
                 sessionStorage.setItem('isFhaCase', 'true');
-                
+
                 // Create a link to the custom analysis section that carries the FHA flag
                 const customAnalysisLink = document.createElement('a');
                 // Append ?fha=true to the URL
@@ -4104,7 +4178,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                 addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: 'Is there any financial assistance...' field must be marked 'Yes' or 'No'. It is currently blank. Please select an option.`);
             }
             {% endif %}
-            
+
             {% if section_key == 'neighborhood' %}
             // Validation for Neighborhood section percentages
             const fieldsToSum = ['One-Unit', '2-4 Unit', 'Multi-Family', 'Commercial', 'Other'];
@@ -4179,7 +4253,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                 if (fieldCell && fieldCell.textContent.trim() === 'Neighborhood Boundaries') {
                     const valueCell = row.querySelector('td:last-child');
                     const valueText = normalizeText(valueCell.textContent.trim());
-                    
+
                     const missingDirections = [];
                     if (!valueText || !valueText.includes('north')) missingDirections.push('North');
                     if (!valueText || !valueText.includes('south')) missingDirections.push('South');
@@ -4231,7 +4305,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                     if (fieldName === 'Zoning Description' && valueLower && valueLower.includes('agr')) {
                         addValidationMessage(validationContainer, 'error', `<strong>⚠️ CRITICAL WARNING: Zoning Description contains 'Agriculture'/'agr'. This is not acceptable.</strong>`);
                     }
-                    
+
                     // 4. Zoning Compliance validation
                     if (fieldName === 'Zoning Compliance') {
                         const complianceValue = value;
@@ -4330,19 +4404,19 @@ c. for question " any prior sales or transfers of the comparable sales for the y
             // --- FEMA Validation ---
             let femaHazardAreaValue = normalizeText(getFieldValue(tableRows, 'FEMA Special Flood Hazard Area'));
             let femaFloodZoneValue = normalizeText(getFieldValue(tableRows, 'FEMA Flood Zone'));
-            
+
             if (!isEmpty(femaHazardAreaValue) && !isEmpty(femaFloodZoneValue)) {
                 let isValid = false;
 
                 if (femaHazardAreaValue === 'yes' && (femaFloodZoneValue === 'a' || femaFloodZoneValue === 'ae')) {
-                    isValid = true; 
+                    isValid = true;
                 } else if (femaHazardAreaValue === 'no' && (femaFloodZoneValue === 'x' || femaFloodZoneValue === 'x500')) {
                     isValid = true;
                 }
 
                 if (isValid) {
                     addValidationMessage(validationContainer, 'success', `✅ Validation successful: FEMA Flood Zone '${femaFloodZoneValue.toUpperCase()}' is consistent with Special Flood Hazard Area being '${femaHazardAreaValue}'.`);
-                } else { 
+                } else {
                     addValidationMessage(validationContainer, 'error', `⚠️ Validation warning: FEMA Flood Zone '${femaFloodZoneValue.toUpperCase()}' is inconsistent. It should be 'A' or 'AE' if Hazard Area is 'Yes', or 'X' or 'X500' if Hazard Area is 'No'. Please correct.`);
                 }
             } else if (!isEmpty(femaHazardAreaValue) || !isEmpty(femaFloodZoneValue)) {
@@ -4482,7 +4556,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
             if (!isEmpty(fuelValue)) {
                 const validFuels = ['gas', 'oil', 'electric'];
                 const fuelParts = normalizeText(fuelValue).split(/[\s,\/]+/);
-                
+
                 const allPartsValid = fuelParts.every(part => validFuels.includes(part.trim()));
 
                 if (!allPartsValid) {
@@ -4702,6 +4776,97 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                     }
                 }
             });
+
+                // Validation for Date of Sale vs Effective Date
+                async function validateSaleDates() {
+                    let effectiveDate = sessionStorage.getItem('reconciliationEffectiveDate');
+                    
+                    if (!effectiveDate) {
+                        try {
+                            const resp = await fetch(`/api/data/{{ filename }}/reconciliation/`);
+                            const data = await resp.json();
+                            if (data && !data.error) {
+                                effectiveDate = data['Effective Date of Value'];
+                                if (effectiveDate) {
+                                    sessionStorage.setItem('reconciliationEffectiveDate', effectiveDate);
+                                }
+                            }
+                        } catch (e) { console.error('Error fetching reconciliation data', e); }
+                    }
+
+                    if (effectiveDate) {
+                        const effDateObj = new Date(effectiveDate);
+                        if (!isNaN(effDateObj.getTime())) {
+                            const dateRow = Array.from(tableRows).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Date of Sale/Time');
+                            if (dateRow) {
+                                const cells = dateRow.querySelectorAll('td');
+                                // Index 0: Label, Index 1: Subject. Comps start at Index 2.
+                                for (let i = 2; i < cells.length; i++) {
+                                    const cell = cells[i];
+                                    const val = cell.textContent.trim();
+                                    if (!isEmpty(val)) {
+                                        let cleanDate = val.split(';')[0].trim();
+                                        cleanDate = cleanDate.replace(/^[scSC]\s*/, '');
+                                        
+                                        const saleDateObj = new Date(cleanDate);
+                                        if (!isNaN(saleDateObj.getTime())) {
+                                            if (saleDateObj > effDateObj) {
+                                                const compIndex = i - 1;
+                                                addValidationMessage(validationContainer, 'error', `⚠️ Validation Error: Comparable #${compIndex} 'Date of Sale' (${cleanDate}) is after the 'Effective Date of Value' (${effectiveDate}).`);
+                                            }
+
+                                                const oneYearAgo = new Date(effDateObj);
+                                                oneYearAgo.setFullYear(effDateObj.getFullYear() - 1);
+                                                if (saleDateObj < oneYearAgo) {
+                                                    const compIndex = i - 1;
+                                                    addValidationMessage(validationContainer, 'error', `⚠️ Validation Error: Comparable #${compIndex} 'Date of Sale' (${cleanDate}) is more than 12 months prior to the 'Effective Date of Value' (${effectiveDate}).`);
+                                                }
+
+                                            const oneYearAgo = new Date(effDateObj);
+                                            oneYearAgo.setFullYear(effDateObj.getFullYear() - 1);
+                                            if (saleDateObj < oneYearAgo) {
+                                                const compIndex = i - 1;
+                                                addValidationMessage(validationContainer, 'error', `⚠️ Validation Error: Comparable #${compIndex} 'Date of Sale' (${cleanDate}) is more than 12 months prior to the 'Effective Date of Value' (${effectiveDate}).`);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                validateSaleDates();
+
+                // Validation for Net Adjustment vs Sale Price (15% rule)
+                function validateNetAdjustments() {
+                    const salePriceRow = Array.from(tableRows).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Sale Price');
+                    const netAdjRow = Array.from(tableRows).find(r => {
+                        const text = r.querySelector('td:first-child')?.textContent.trim();
+                        return text && (text.startsWith('Net Adjustment') || text.startsWith('Net Adj'));
+                    });
+
+                    if (salePriceRow && netAdjRow) {
+                        const salePriceCells = salePriceRow.querySelectorAll('td');
+                        const netAdjCells = netAdjRow.querySelectorAll('td');
+
+                        for (let i = 2; i < salePriceCells.length; i++) {
+                            const salePriceText = salePriceCells[i].textContent.trim();
+                            const netAdjText = netAdjCells[i].textContent.trim();
+
+                            const salePrice = normalizeNumericValue(salePriceText);
+                            const netAdj = normalizeNumericValue(netAdjText);
+
+                            if (salePrice && salePrice > 0 && netAdj !== null) {
+                                const percentage = (Math.abs(netAdj) / salePrice) * 100;
+                                if (percentage > 15) {
+                                    const compIndex = i - 1;
+                                    addValidationMessage(validationContainer, 'warning', `⚠️ Validation Warning: Comparable #${compIndex} 'Net Adjustment' (${netAdjText}) is ${percentage.toFixed(1)}% of 'Sale Price' (${salePriceText}), which exceeds 15%.`);
+                                }
+                            }
+                        }
+                    }
+                }
+                validateNetAdjustments();
             {% else %}
             // This block seems to be a fallback for other sections to store salesGridIndicatedValue,
             // but it's less reliable than getting it directly from the sales_grid section.
@@ -4850,7 +5015,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
             } else {
                 addValidationMessage(validationContainer, 'warning', "ℹ️ Info: Could not find 'Effective Date of Value' from Reconciliation section to compare. Please visit the Reconciliation section first.");
             }
-            
+
             // 5. LENDER/CLIENT Name should always have "fastapp"
             const lenderClientName = getFieldValue(tableRows, 'LENDER/CLIENT Name');
             if (!isEmpty(lenderClientName)) {
@@ -4865,7 +5030,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
 
             // Validation for Lender/Client consistency
             const subjectState = sessionStorage.getItem('subjectState'); // Not directly used here, but good to know it's available
-            
+
             const subjectLenderClient = sessionStorage.getItem('subjectLenderClient');
             if (!isEmpty(subjectLenderClient)) {
                 const certificationLenderClientCompanyName = getFieldValue(tableRows, 'Lender/Client Company Name');
@@ -5227,7 +5392,7 @@ c. for question " any prior sales or transfers of the comparable sales for the y
             // Validation for GLA Consistency custom analysis
             const customPrompt = `{{ custom_prompt|escapejs }}`.toLowerCase().replace(/\s+/g, ' ').trim();
             const analysisSummary = `{{ data.analysis_summary|escapejs }}`.toLowerCase();
-            
+
             const isPrompt = (text) => customPrompt.includes(text.toLowerCase());
 
             if (isPrompt("discrepancies in the gross living area") && !isEmpty(analysisSummary)) {
@@ -5361,6 +5526,21 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                 addValidationMessage(validationContainer, 'success', `✅ Validation Passed: All required 'Research and Analysis' fields are filled.`);
             }
 
+                // Rule 1.1: Prior Sale History Grid "Data Source(s)" and "Effective Date" required
+                const requiredGridFields = ["Data Source(s)", "Effective Date of Data Source(s)"];
+                requiredGridFields.forEach(field => {
+                    const row = getGridRow(field);
+                    if (row) {
+                        const valueCells = Array.from(row.querySelectorAll('td.editable-value'));
+                        valueCells.forEach((cell, index) => {
+                            if (isEmpty(cell.textContent.trim())) {
+                                const colName = cell.dataset.fieldName ? cell.dataset.fieldName.split('-').pop().trim() : `Column ${index+1}`;
+                                addValidationMessage(validationContainer, 'error', `⚠️ Validation Failed: '${field}' is required for ${colName}.`);
+                            }
+                        });
+                    }
+                });
+
             // Rule 2: "I ____ research..." must be "did"
             const researchPerformed = getResearchFieldValue("I ____ research the sale or transfer history");
             if (!isEmpty(researchPerformed) && normalizeText(researchPerformed) !== 'did') {
@@ -5369,48 +5549,103 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                 addValidationMessage(validationContainer, 'success', `✅ Validation Passed: Research was performed ('did').`);
             }
 
-            // Rule 3: Conditional validation for Subject prior sale
-            const subjectHistoryFound = getResearchFieldValue("My research _____ reveal any prior sales or transfers of the subject property");
-            if (!isEmpty(subjectHistoryFound) && normalizeText(subjectHistoryFound) === 'did') {
-                const subjectDate = getFieldValue(gridTable.querySelectorAll('tbody tr'), 'Date of Prior Sale/Transfer - Subject');
-                const subjectPrice = getFieldValue(gridTable.querySelectorAll('tbody tr'), 'Price of Prior Sale/Transfer - Subject');
-
-                if (isEmpty(subjectDate) || isEmpty(subjectPrice)) {
-                    addValidationMessage(validationContainer, 'error', `⚠️ Validation Failed: Report indicates a prior sale for the Subject was found, but 'Date of Prior Sale/Transfer' or 'Price of Prior Sale/Transfer' is missing in the grid. Please provide both.`);
-                } else {
-                    addValidationMessage(validationContainer, 'success', `✅ Validation Passed: Subject prior sale details are present as required.`);
+                // Async validation for Date/Price logic
+                async function validateSaleHistoryDates() {
+                    // Fetch Reconciliation Data for Effective Date
+                    let effectiveDate = sessionStorage.getItem('reconciliationEffectiveDate');
+                    if (!effectiveDate) {
+                        try {
+                            const resp = await fetch(`/api/data/{{ filename }}/reconciliation/`);
+                            const data = await resp.json();
+                            if (data && !data.error) {
+                                effectiveDate = data['Effective Date of Value'];
+                            }
+                        } catch (e) { console.error('Error fetching reconciliation data', e); }
                 }
-            }
 
-            // Rule 4: Conditional validation for Comparables' prior sales
-            const compHistoryFound = getResearchFieldValue("My research ______ reveal any prior sales or transfers of the comparable sales");
-            if (!isEmpty(compHistoryFound) && normalizeText(compHistoryFound) === 'did') {
-                const compDateRow = Array.from(gridTable.querySelectorAll('tbody tr')).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Date of Prior Sale/Transfer');
-                const compPriceRow = Array.from(gridTable.querySelectorAll('tbody tr')).find(r => r.querySelector('td:first-child')?.textContent.trim() === 'Price of Prior Sale/Transfer');
+                    // Fetch Sales Grid Data for Comp Sale Dates
+                    let salesGridData = null;
+                    try {
+                        const resp = await fetch(`/api/data/{{ filename }}/sales_grid/`);
+                        salesGridData = await resp.json();
+                    } catch (e) { console.error('Error fetching sales grid data', e); }
 
-                if (compDateRow && compPriceRow) {
-                    const compDateCells = Array.from(compDateRow.querySelectorAll('td')).slice(2); // Skip Feature and Subject columns
-                    const compPriceCells = Array.from(compPriceRow.querySelectorAll('td')).slice(2);
+                    // Rule 3: Subject Prior Sale Logic
+                    const subjectHistoryFound = getResearchFieldValue("My research _____ reveal any prior sales or transfers of the subject property");
+                    if (!isEmpty(subjectHistoryFound) && normalizeText(subjectHistoryFound) === 'did') {
+                        const dateRow = getGridRow('Date of Prior Sale/Transfer');
+                        const priceRow = getGridRow('Price of Prior Sale/Transfer');
+                        
+                        const sDateCell = dateRow?.querySelector('td[data-field-name*="- Subject"]');
+                        const sPriceCell = priceRow?.querySelector('td[data-field-name*="- Subject"]');
+                        
+                        const sDateVal = sDateCell?.textContent.trim();
+                        const sPriceVal = sPriceCell?.textContent.trim();
 
-                    let atLeastOneCompHasData = false;
-                    for (let i = 0; i < compDateCells.length; i++) {
-                        const date = compDateCells[i].textContent.trim();
-                        const price = compPriceCells[i].textContent.trim();
-                        if (!isEmpty(date) && !isEmpty(price)) {
-                            atLeastOneCompHasData = true;
-                            break;
+                        if (isEmpty(sPriceVal)) {
+                             addValidationMessage(validationContainer, 'error', `⚠️ Validation Failed: Subject prior sale price is missing.`);
+                        }
+                        
+                        if (effectiveDate && !isEmpty(sDateVal)) {
+                            const effDateObj = new Date(effectiveDate);
+                            const sDateObj = new Date(sDateVal);
+                            const threeYearsAgo = new Date(effDateObj);
+                            threeYearsAgo.setFullYear(effDateObj.getFullYear() - 3);
+                            
+                            if (!isNaN(sDateObj) && !isNaN(effDateObj)) {
+                                if (sDateObj > effDateObj || sDateObj < threeYearsAgo) {
+                                     addValidationMessage(validationContainer, 'error', `⚠️ Validation Failed: Subject prior sale date (${sDateVal}) is not within 3 years prior to effective date (${effectiveDate}).`);
+                                } else {
+                                     addValidationMessage(validationContainer, 'success', `✅ Validation Passed: Subject prior sale date is within 3 years.`);
+                                }
                         }
                     }
-
-                    if (!atLeastOneCompHasData) {
-                        addValidationMessage(validationContainer, 'error', `⚠️ Validation Failed: Report indicates prior sales for Comparables were found, but no comparable has both 'Date of Prior Sale/Transfer' and 'Price of Prior Sale/Transfer' filled in the grid. Please provide details for at least one comparable.`);
-                    } else {
-                        addValidationMessage(validationContainer, 'success', `✅ Validation Passed: At least one comparable has prior sale details as required.`);
                     }
-                } else {
-                    addValidationMessage(validationContainer, 'error', `⚠️ Validation Failed: 'Date of Prior Sale/Transfer' or 'Price of Prior Sale/Transfer' rows are missing from the grid for comparables.`);
+
+                    // Rule 4: Comparable Prior Sale Logic
+                    const compHistoryFound = getResearchFieldValue("My research ______ reveal any prior sales or transfers of the comparable sales");
+                    if (!isEmpty(compHistoryFound) && normalizeText(compHistoryFound) === 'did') {
+                        const dateRow = getGridRow('Date of Prior Sale/Transfer');
+                        const priceRow = getGridRow('Price of Prior Sale/Transfer');
+                        
+                        if (salesGridData && salesGridData.comparables) {
+                            salesGridData.comparables.forEach((comp, index) => {
+                                const compNum = index + 1;
+                                const cDateCell = dateRow?.querySelector(`td[data-field-name*="- Comparable #${compNum}"]`);
+                                const cPriceCell = priceRow?.querySelector(`td[data-field-name*="- Comparable #${compNum}"]`);
+                                
+                                const cDateVal = cDateCell?.textContent.trim();
+                                const cPriceVal = cPriceCell?.textContent.trim();
+                                
+                                // If data is present, validate it
+                                if (!isEmpty(cDateVal) || !isEmpty(cPriceVal)) {
+                                    if (isEmpty(cPriceVal)) {
+                                        addValidationMessage(validationContainer, 'error', `⚠️ Validation Failed: Comparable #${compNum} prior sale price is missing.`);
+                                    }
+                                    
+                                    const saleDateStr = comp['Date of Sale/Time'];
+                                    const cleanSaleDate = saleDateStr ? saleDateStr.replace(/^[sS]/, '').trim() : null;
+                                    
+                                    if (cleanSaleDate && !isEmpty(cDateVal)) {
+                                        const saleDateObj = new Date(cleanSaleDate);
+                                        const priorDateObj = new Date(cDateVal);
+                                        const oneYearAgo = new Date(saleDateObj);
+                                        oneYearAgo.setFullYear(saleDateObj.getFullYear() - 1);
+                                        
+                                        if (!isNaN(priorDateObj) && !isNaN(saleDateObj)) {
+                                            if (priorDateObj > saleDateObj || priorDateObj < oneYearAgo) {
+                                                addValidationMessage(validationContainer, 'error', `⚠️ Validation Failed: Comparable #${compNum} prior sale date (${cDateVal}) is not within 1 year prior to sale date (${cleanSaleDate}).`);
+                                            } else {
+                                                addValidationMessage(validationContainer, 'success', `✅ Validation Passed: Comparable #${compNum} prior sale date is within 1 year.`);
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                    }
                 }
             }
+                validateSaleHistoryDates();
             {% endif %}
 
             {% if section_key == 'pud_info' %}
@@ -5450,6 +5685,38 @@ c. for question " any prior sales or transfers of the comparable sales for the y
                 }
             } else {
                 addValidationMessage(validationContainer, 'info', "ℹ️ PUD is not marked 'Yes' in the Subject section. This 'PUD Info' section is not strictly required.");
+            }
+            {% endif %}
+
+            {% if section_key == 'all_in_one_check' %}
+            // --- All In One Check Validation ---
+            const findingsTable = document.querySelector('.findings-table');
+            if (findingsTable) {
+                const checkRows = findingsTable.querySelectorAll('tbody tr');
+                let issuesFound = 0;
+
+                checkRows.forEach(row => {
+                    const statusCell = row.querySelector('td:first-child span');
+                    if (statusCell) {
+                        const status = normalizeText(statusCell.textContent);
+                        const negativeStatuses = ['inconsistent', 'missing', 'failed', 'fail'];
+
+                        if (negativeStatuses.includes(status)) {
+                            issuesFound++;
+                            const section = row.querySelector('.finding-title')?.textContent.trim() || 'Unknown Section';
+                            const comment = row.querySelector('.check-details')?.textContent.trim() || 'No comment.';
+
+                            // Add individual error messages for each failed check
+                            addValidationMessage(validationContainer, 'error', `❌ <strong>${section}:</strong> ${comment}`);
+                        }
+                    }
+                });
+
+                if (issuesFound === 0) {
+                    addValidationMessage(validationContainer, 'success', '✅ All checks passed. No inconsistencies or missing items were automatically detected.');
+                } else {
+                    addValidationMessage(validationContainer, 'warning', `ℹ️ A total of <strong>${issuesFound}</strong> issue(s) were found. Please review the items marked with ❌ below.`);
+                }
             }
             {% endif %}
             {% if section_key == 'state_requirement' %}

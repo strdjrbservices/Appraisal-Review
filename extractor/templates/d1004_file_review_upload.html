@@ -4,17 +4,96 @@
     .d1004-form .file-upload-container {
         grid-template-columns: repeat(2, 1fr);
     }
+    .tab-container {
+        width: 100%;
+        /* border: 1px solid var(--border-color); */
+        background-color: #fff;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .tab-header {
+        display: flex;
+        background-color: #f9fafb;
+        padding: 5px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .nav-tabs {
+        display: flex; 
+        justify-content: center; 
+        gap: 10px; 
+        padding: 15px 0;
+        background: #f8f9fa;
+        border-bottom: 1px solid #e2e2e2;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .tab-link {
+        text-decoration: none;
+        color: #4b5563;
+        font-weight: 600;
+        font-size: 15px;
+        padding: 8px 16px;
+        border-radius: 20px;
+        transition: all 0.2s ease;
+    }
+    .tab-link:hover {
+        background-color: #e5e7eb;
+        color: #111827;
+    }
+    .tab-link.active {
+        color: #0d6efd;
+        background-color: #e7f1ff;
+        box-shadow: 0 2px 4px rgba(13, 110, 253, 0.1);
+    }
+    .tab-content {
+        display: none;
+        padding: 25px;
+        animation: fadeIn 0.5s;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    .tab-content.active {
+        display: block;
+    }
+    .tab-content h2 {
+        margin-top: 0;
+        color: var(--text-primary);
+    }
+    .tab-content p {
+        color: #6b7280;
+        margin-bottom: 1.5rem;
+    }
 </style>
 {% endblock %}
 
 {% block title %}1004D File Review{% endblock %}
 
 {% block content %}
-<form id="upload-form" class="d1004-form" action="{% url 'd1004_file_review_process' %}" method="post" enctype="multipart/form-data">
-    <h2>1004D File Review</h2>
-    <p>Upload the original appraisal report and the 1004D form to compare key information.</p>
+<div class="header-logout">
+    {% if user.is_authenticated %}
+        Welcome, {{ user.username }} | <a href="{% url 'logout' %}">Logout</a>
+    {% endif %}
+</div>
+<div class="tab-container" style="border: none; box-shadow: none; scrollbar-width: none; overflow-x: hidden; overflow-y: hidden; ">
+    <div class="nav-tabs">
+        <!-- ACTIVE TAB -->
+        <a href="{% url 'upload_pdf' %}" class="tab-link" target="_blank">
+        Full File Review
+        </a>
+        <a href="{% url 'update_file_review_upload' %}" class="tab-link" target="_blank">
+        Update File Review
+        </a>
+        <a href="{% url 'd1004_file_review_upload' %}" class="tab-link  active" target="_blank">
+        1004D File Review
+        </a>
+    </div>
+<form id="upload-form-full" class="" action="{% url 'd1004_file_review_process' %}" method="post" enctype="multipart/form-data">
+    <h2 style="display: flex; justify-content: center; align-items: center;">1004D File Review</h2>
+    <p style="display: flex; justify-content: center; align-items: center;">Upload the original appraisal report and the 1004D form to compare key information.</p>
     {% csrf_token %}
-    <div class="file-upload-container">
+    <div class="upload-grid-container" style="margin-left: auto ; margin-right: auto ; width :1100px; display: flex; justify-content: center; align-items: center;">
         <div id="file-drop-zone-original" class="file-drop-zone">
             <p class="drop-zone-text"><strong>Original Appraisal (PDF):</strong><br>Drag & Drop or <span class="browse-link">browse</span></p>
             <span id="file-name-original" class="file-name"></span>
@@ -36,8 +115,9 @@
     <input id="d1004_pdf" type="file" name="d1004_pdf" accept="application/pdf" required>
     <input id="html_file" type="file" name="html_file" accept=".html,.htm">
     <input id="purchase_copy_file" type="file" name="purchase_copy_file" accept="application/pdf">
-    <button type="submit" class="btn">Start 1004D Review</button>
+    <button type="submit" class="btn" style="margin: 20px auto; width: 100%; max-width: 400px; display:flex; justify-content: center; align-items: center;">Start 1004D Review</button>
 </form>
+</div>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {

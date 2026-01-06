@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
-{% block title %}Appraisal Report Review{% endblock %} 
-{% block extra_css %} 
+{% block title %}Full File Review{% endblock %}
+{% block extra_css %}
 <style>
     .tab-container {
         width: 100%;
@@ -9,117 +9,132 @@
         background-color: #fff;
         border-radius: 8px;
         overflow: hidden;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
     }
+
     .tab-header {
         display: flex;
         background-color: #f9fafb;
         padding: 5px;
         border-bottom: 1px solid var(--border-color);
     }
+
+    .nav-tabs {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        padding: 15px 0;
+        background: #f8f9fa;
+        border-bottom: 1px solid #e2e2e2;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
     .tab-link {
-        padding: 14px 20px;
-        cursor: pointer;
-        border: none;
-        background-color: transparent;
-        font-size: 1rem;
-        font-weight: 500;
-        color: #6b7280;
-        transition: all 0.2s ease-in-out; 
-        border-radius: 6px;
         text-decoration: none;
-        text-align: center;
+        color: #4b5563;
+        font-weight: 600;
+        font-size: 15px;
+        padding: 8px 16px;
+        border-radius: 20px;
+        transition: all 0.2s ease;
     }
+
     .tab-link:hover {
-        background-color: #f3f4f6;
-        color: #1f2937;
+        background-color: #e5e7eb;
+        color: #111827;
     }
+
     .tab-link.active {
-        color: #fff;
-        /* border-bottom-color: var(--primary-color); */
-        background-color: #fff;
-        background-color: var(--primary-color);
+        color: #0d6efd;
+        background-color: #e7f1ff;
+        box-shadow: 0 2px 4px rgba(13, 110, 253, 0.1);
     }
+
     .tab-content {
         display: none;
         padding: 25px;
         animation: fadeIn 0.5s;
     }
+
     @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
     }
+
     .tab-content.active {
         display: block;
     }
+
     .tab-content h2 {
         margin-top: 0;
         color: var(--text-primary);
     }
+
     .tab-content p {
         color: #6b7280;
         margin-bottom: 1.5rem;
-    } 
+    }
 </style>
 {% endblock %}
- 
+
 {% block content %}
 <div class="header-logout">
     {% if user.is_authenticated %}
-        Welcome, {{ user.username }} | <a href="{% url 'logout' %}">Logout</a>
+    Welcome, {{ user.username }} | <a href="{% url 'logout' %}">Logout</a>
     {% endif %}
 </div>
 
-<div class="tab-container" style="border: none; box-shadow: none;">
-    <div style="
-    display: flex; 
-    justify-content: center; 
-    gap: 18px; 
-    height: 30px;
-    padding: 12px 0;
-    background: #f8f9fa;
-    border-bottom: 2px solid #e2e2e2;
-    font-family: Arial, sans-serif;
-    ">
+<div class="tab-container"
+    style="border: none; box-shadow: none; scrollbar-width: none; overflow-x: hidden; overflow-y: hidden; ">
+    <div class="nav-tabs">
         <!-- ACTIVE TAB -->
-        <a href="{% url 'upload_pdf' %}" target="_blank"
-        style="text-decoration:none; color:#0d6efd; font-weight:700; font-size:15px; border-bottom:2px solid #0d6efd; padding-bottom:3px;">
-        Full File Review
-        </a> |
-
-        <a href="{% url 'update_file_review_upload' %}" target="_blank"
-        style="text-decoration:none; color:#333; font-weight:600; font-size:15px;">
-        Update File Review
-        </a> |
-
-        <!-- <a href="{% url 'escalation_check_upload' %}" target="_blank"
-        style="text-decoration:none; color:#333; font-weight:600; font-size:15px;">
-        Escalation Check
-        </a> | -->
-        <a href="{% url 'd1004_file_review_upload' %}" target="_blank"
-        style="text-decoration:none; color:#333; font-weight:600; font-size:15px;">
-        1004D File Review
+        <a href="{% url 'upload_pdf' %}" class="tab-link active" target="_blank">
+            Full File Review
+        </a>
+        <a href="{% url 'update_file_review_upload' %}" class="tab-link" target="_blank">
+            Update File Review
+        </a>
+        <a href="{% url 'd1004_file_review_upload' %}" class="tab-link" target="_blank">
+            1004D File Review
         </a>
     </div>
-
-
-
-    <div id="FullReview" class="tab-content active">
+    <div id="FullReview" >
         <form id="upload-form-full" action="{% url 'upload_pdf' %}" method="post" enctype="multipart/form-data">
             <h2 style="display: flex; justify-content: center; align-items: center;">Full File Reviewer</h2>
-            <p style="display: flex; justify-content: center; align-items: center;">Upload an appraisal PDF and optional supporting documents to start a comprehensive review.</p>
+            <p style="display: flex; justify-content: center; align-items: center;">Upload an appraisal PDF and optional
+                supporting documents to start a comprehensive review.</p>
             {% csrf_token %}
-            <div class="upload-grid-container" style="display: flex; justify-content: center; align-items: center;">
-                <div id="file-drop-zone-pdf" class="file-drop-zone"><p class="drop-zone-text"><strong>Appraisal PDF (Required):</strong><br>Drag & Drop or <span class="browse-link">browse</span></p><span id="file-name-pdf" class="file-name"></span></div>
-                <div id="file-drop-zone-html" class="file-drop-zone"><p class="drop-zone-text"><strong>Order Form HTML (Optional):</strong><br>Drag & Drop or <span class="browse-link">browse</span></p><span id="file-name-html" class="file-name"></span></div>
-                <div id="file-drop-zone-purchase" class="file-drop-zone"><p class="drop-zone-text"><strong>Purchase Copy (Optional):</strong><br>Drag & Drop or <span class="browse-link">browse</span></p><span id="file-name-purchase" class="file-name"></span></div>
-                <div id="file-drop-zone-engagement" class="file-drop-zone"><p class="drop-zone-text"><strong>Engagement Letter (Optional):</strong><br>Drag & Drop or <span class="browse-link">browse</span></p><span id="file-name-engagement" class="file-name"></span></div>
+            <div class="upload-grid-container" style="margin-left: auto ; margin-right: auto ; width :1100px; display: flex; justify-content: center; align-items: center;">
+                <div id="file-drop-zone-pdf" class="file-drop-zone">
+                    <p class="drop-zone-text"><strong>Appraisal PDF (Required):</strong><br>Drag & Drop or <span
+                            class="browse-link">browse</span></p><span id="file-name-pdf" class="file-name"></span>
+                </div>
+                <div id="file-drop-zone-html" class="file-drop-zone">
+                    <p class="drop-zone-text"><strong>Order Form HTML (Optional):</strong><br>Drag & Drop or <span
+                            class="browse-link">browse</span></p><span id="file-name-html" class="file-name"></span>
+                </div>
+                <div id="file-drop-zone-purchase" class="file-drop-zone">
+                    <p class="drop-zone-text"><strong>Purchase Copy (Optional):</strong><br>Drag & Drop or <span
+                            class="browse-link">browse</span></p><span id="file-name-purchase" class="file-name"></span>
+                </div>
+                <div id="file-drop-zone-engagement" class="file-drop-zone">
+                    <p class="drop-zone-text"><strong>Engagement Letter (Optional):</strong><br>Drag & Drop or <span
+                            class="browse-link">browse</span></p><span id="file-name-engagement"
+                        class="file-name"></span>
+                </div>
             </div>
             <input id="pdf_file" type="file" name="pdf_file" accept="application/pdf" required>
             <input id="html_file" type="file" name="html_file" accept=".html,.htm">
             <input id="purchase_copy_file" type="file" name="purchase_copy_file" accept="application/pdf">
             <input id="engagement_letter_file" type="file" name="engagement_letter_file" accept="application/pdf">
-            <button style=" margin-left: auto; margin-right: auto; width: 500px; display:flex; justify-content: center; align-items: center;" type="submit" class="btn">Start Review</button>
+            <button
+                style="margin: 20px auto; width: 100%; max-width: 400px; display:flex; justify-content: center; align-items: center;"
+                type="submit" class="btn">Start Review</button>
         </form>
     </div>
 </div>
@@ -131,7 +146,7 @@
     // Show loader on form submission
     const fullReviewForm = document.getElementById('upload-form-full');
     if (fullReviewForm) {
-        fullReviewForm.addEventListener('submit', function() {
+        fullReviewForm.addEventListener('submit', function () {
             // Clear session storage for a new review session
             sessionStorage.removeItem('reviewStartTime');
             sessionStorage.removeItem('isPurchaseTransaction');
@@ -148,7 +163,7 @@
             document.getElementById('loader-overlay').style.display = 'flex';
         });
     }
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         function setupDragAndDrop(dropZoneId, fileInputId, fileNameId) {
             const dropZone = document.getElementById(dropZoneId);
             const fileInput = document.getElementById(fileInputId);

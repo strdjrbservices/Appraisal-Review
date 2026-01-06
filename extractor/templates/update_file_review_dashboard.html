@@ -3,7 +3,12 @@
 
 {% block title %}Update File Review Dashboard{% endblock %}
 {% block extra_css %}
-<body style="background-color: var(--primary-bg);">
+{% include '_stats_widget_css.html' %}
+<style>
+    body {
+        background-color: var(--primary-bg);
+    }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -20,6 +25,7 @@
 
     <div class="main-grid">
         <div class="file-details-column">
+            {% include '_stats_widget.html' %}
             <div class="card">
                 <h3>File Details</h3>
                 <div class="detail-item">

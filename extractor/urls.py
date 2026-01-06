@@ -8,6 +8,7 @@ urlpatterns = [
     path('register/', views.register_view, name='register'),
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
+    path('contact-us/', views.contact_us_view, name='contact_us'),
     path('extract/<str:filename>/<str:section_name>/', views.extract_section, name='extract_section'),
     path('compare-html-pdf/', views.compare_html_pdf_upload_view, name='compare_html_pdf_upload'),
     path('compare-html-pdf/process/', views.compare_html_pdf_process_view, name='compare_html_pdf_process'),
@@ -20,6 +21,11 @@ urlpatterns = [
     path('review/update/', views.update_file_review_upload_view, name='update_file_review_upload'),
     path('review/update/process/', views.update_file_review_process_view, name='update_file_review_process'),
     path('review/update/custom-analysis/', views.update_file_review_custom_analysis_view, name='update_file_review_custom_analysis'),
+    path('history/', views.history_view, name='history'),
+    path('history/<int:pk>/', views.history_detail_view, name='history_detail'),
+    path('history/export-csv/', views.export_history_csv, name='export_history_csv'),
+    path('history/delete/<int:pk>/', views.delete_history_item, name='delete_history'),
+    path('history/bulk-delete/', views.bulk_delete_history, name='bulk_delete_history'),
     
     # API endpoint for fetching section data
     path('api/data/<str:filename>/<str:section_name>/', views.get_section_data_api, name='get_section_data_api'),

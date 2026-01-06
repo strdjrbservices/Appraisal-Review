@@ -4,11 +4,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link rel="stylesheet" href="{% static 'extractor/css/style.css' %}">
+    <link rel="icon" type="image/png" href="{% static 'extractor/img/logo.png' %}">
     <title>Error</title>
 </head>
 <body class="error-body">
     <div class="error-container">
+        <div class="logo-container" style="text-align: center; margin-bottom: 15px;">
+            <img src="{% static 'extractor/img/logo (2).png' %}" alt="Logo" style="max-width: 150px; height: auto;">
+        </div>
         <h1>An Error Occurred</h1>
         <p>Something went wrong during the process. Here is the error message:</p>
         <div class="error-message">{{ error_message }}</div>
