@@ -1,4 +1,4 @@
-import google.generativeai as genai
+import google as genai
 from django.conf import settings
 import logging
 
