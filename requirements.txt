@@ -1,5 +1,5 @@
-pip install django
-pip install google-genai
-pip install google-generativeai
-pip install beautifulsoup4
-pip install PyMuPDF
+django
+google-genai
+google-generativeai
+beautifulsoup4
+PyMuPDF
