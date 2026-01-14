@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block title %}Extraction History - {{ filename }}{% endblock %}
+
+{% block content %}
+<div class="history-container" style="padding: 20px;">
+    <div class="header-container" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h1>Extraction History for {{ filename }}</h1>
+        <a href="{% url 'upload_pdf' %}" class="btn btn-secondary">Back to Upload</a>
+    </div>
+
+    {% if results %}
+        <div class="card">
+            <table class="table table-striped" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background-color: #f8f9fa; text-align: left;">
+                        <th style="padding: 12px;">Section</th>
+                        <th style="padding: 12px;">Last Updated</th>
+                        <th style="padding: 12px;">Backend Validation</th>
+                        <th style="padding: 12px;">Frontend Validation</th>
+                        <th style="padding: 12px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for result in results %}
+                    <tr style="border-bottom: 1px solid #e5e7eb;">
+                        <td style="padding: 12px;"><strong>{{ result.section_name|title }}</strong></td>
+                        <td style="padding: 12px;">{{ result.updated_at|date:"M d, Y H:i" }}</td>
+                        <td style="padding: 12px;">
+                            {% if result.backend_validation %}
+                                {% if result.backend_validation.status == 'error' %}
+                                    <span class="badge bg-danger">Error</span>
+                                {% elif result.backend_validation.status == 'success' %}
+                                    <span class="badge bg-success">Success</span>
+                                {% elif result.backend_validation.validations %}
+                                    <span class="badge bg-info">{{ result.backend_validation.validations|length }} Rules Checked</span>
+                                {% else %}
+                                    <span class="badge bg-info">Info</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 12px;">
+                            {% if result.frontend_validation %}
+                                 <span class="badge bg-primary">{{ result.frontend_validation|length }} Checks Saved</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 12px;">
+                            <a href="{% url 'extract_section' filename=filename section_name=result.section_name %}" class="btn btn-sm btn-primary" style="text-decoration: none;">View Section</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="alert alert-info">No extraction history found for this file. Start by extracting a section.</div>
+    {% endif %}
+</div>
+{% endblock %}

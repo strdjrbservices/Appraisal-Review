@@ -1,40 +1,23 @@
-from django.shortcuts import render, redirect, get_object_or_404, HttpResponse
+from django.shortcuts import render, redirect
 from django.core.files.storage import FileSystemStorage
-from .services import extract_fields_from_pdf, FIELD_SECTIONS, SUBJECT_FIELDS
+from .services import extract_fields_from_pdf, FIELD_SECTIONS
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib import messages
 from .forms import SignUpForm, UpdateFileReviewForm
-from .models import ExtractedData
 from .utils import _extract_from_html_file
 from asgiref.sync import sync_to_async
 from .comparison import compare_data_sets, compare_1004d, compare_revised_vs_old
+from .models import ExtractionResult
 from django.views.decorators.csrf import csrf_exempt
 import fitz  # PyMuPDF
 from django.http import JsonResponse
 import re
 import asyncio
 import json
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-import csv
-
-def _get_user_extraction_stats(user):
-    """Helper function to calculate extraction statistics for a user."""
-    all_user_extractions = list(ExtractedData.objects.filter(user=user))
-    total_extractions = len(all_user_extractions)
-    successful_extractions = sum(1 for item in all_user_extractions if 'error' not in item.data)
-    
-    success_rate = 0
-    if total_extractions > 0:
-        success_rate = round((successful_extractions / total_extractions) * 100)
-
-    return {
-        'total_extractions': total_extractions,
-        'successful_extractions': successful_extractions,
-        'success_rate': success_rate,
-    }
+from datetime import datetime, timedelta
 
 def register_view(request):
     if request.method == 'POST':
@@ -122,9 +105,6 @@ async def upload_pdf(request):
             if 'error' not in extracted_engagement_data:
                 engagement_data = {'addendum': extracted_engagement_data}
 
-        # --- Calculate Extraction Statistics ---
-        stats = await sync_to_async(_get_user_extraction_stats)(request.user)
-
         # Extract base information to show in the popup
         base_info = await extract_fields_from_pdf(pdf_path, 'base_info')
 
@@ -145,7 +125,6 @@ async def upload_pdf(request):
             'html_data': html_data,
             'purchase_data': purchase_data,
             'engagement_data': engagement_data,
-            'stats': stats
         }
         return await sync_to_async(render)(request, 'home.html', context)
 
@@ -235,9 +214,6 @@ async def update_file_review_process_view(request):
                         if 'error' not in extracted_engagement_data:
                             engagement_data = {'addendum': extracted_engagement_data}
 
-            # --- Calculate Extraction Statistics ---
-            stats = await sync_to_async(_get_user_extraction_stats)(request.user)
-
             # Extract base info from the revised report for the dashboard display
             base_info = await extract_fields_from_pdf(revised_path, 'base_info')
 
@@ -256,7 +232,6 @@ async def update_file_review_process_view(request):
                 'html_data': html_data,
                 'purchase_data': purchase_data,
                 'engagement_data': engagement_data,
-                'stats': stats
             }
             return await sync_to_async(render)(request, 'update_file_review_dashboard.html', context)
     return await sync_to_async(redirect)('update_file_review_upload')
@@ -305,9 +280,6 @@ async def d1004_file_review_process_view(request):
             purchase_path = await sync_to_async(fs.path)(purchase_filename)
             purchase_data = await extract_fields_from_pdf(purchase_path, 'contract')
 
-        # --- Calculate Extraction Statistics ---
-        stats = await sync_to_async(_get_user_extraction_stats)(request.user)
-
         # Extract base info from the original report for the dashboard display
         base_info = await extract_fields_from_pdf(original_pdf_path, 'base_info')
 
@@ -326,7 +298,6 @@ async def d1004_file_review_process_view(request):
             'sections': sections_for_template,
             'html_data': html_data,
             'purchase_data': purchase_data,
-            'stats': stats
         }
         return await sync_to_async(render)(request, 'd1004_file_review_dashboard.html', context)
 
@@ -788,6 +759,18 @@ async def escalation_check_process_view(request):
     # Redirect to the upload page if it's not a POST request
     return await sync_to_async(redirect)('escalation_check_upload')
 
+def save_extraction_result_sync(user, filename, section_name, extracted_data, backend_validation):
+    """Helper to save extraction results synchronously."""
+    ExtractionResult.objects.update_or_create(
+        filename=filename,
+        section_name=section_name,
+        defaults={
+            'user': user,
+            'extracted_data': extracted_data,
+            'backend_validation': backend_validation
+        }
+    )
+
 # The new view to handle extraction for a specific section
 @login_required
 async def extract_section(request, filename, section_name):
@@ -827,6 +810,7 @@ async def extract_section(request, filename, section_name):
     try:
         # Call the async extraction function with the specific section name
         extracted_data = await extract_fields_from_pdf(uploaded_file_path, section_name, custom_prompt=custom_prompt)
+        backend_validation_data = {}
 
         # --- Backend Validation for Neighborhood Description ---
         if section_name == 'neighborhood' and 'error' not in extracted_data:
@@ -857,14 +841,37 @@ async def extract_section(request, filename, section_name):
                     extracted_data['backend_validation'] = {'status': 'success', 'message': f"FHA Case: The description contains sensitive words ('{', '.join(found_words)}'), which is acceptable for FHA."}
                 else: # Conventional Case
                     extracted_data['backend_validation'] = {'status': 'error', 'message': f"Conventional Case: The description contains forbidden words ('{', '.join(found_words)}'). This is not acceptable."}
+            backend_validation_data = extracted_data.get('backend_validation', {})
         # --- End of Backend Validation ---
 
         # --- Backend Validation for Sale History ---
         if section_name == 'sale_history' and 'error' not in extracted_data:
+            # Fetch additional data needed for validation
+            tasks = {
+                'reconciliation': extract_fields_from_pdf(uploaded_file_path, 'reconciliation'),
+                'sales_grid': extract_fields_from_pdf(uploaded_file_path, 'sales_grid'),
+            }
+            other_results = await asyncio.gather(*tasks.values())
+            other_data = dict(zip(tasks.keys(), other_results))
+            
+            recon_data = other_data.get('reconciliation', {})
+            sales_grid_data = other_data.get('sales_grid', {})
+
             validations = []
             
             def is_empty(val):
-                return val is None or val in ['--', 'null', '']
+                return val is None or str(val).strip() in ['--', 'null', '', 'N/A']
+
+            def parse_date(date_str):
+                if is_empty(date_str):
+                    return None
+                # Try different formats
+                for fmt in ('%m/%d/%Y', '%Y-%m-%d', '%m-%d-%Y', '%b %d, %Y'):
+                    try:
+                        return datetime.strptime(str(date_str).strip(), fmt)
+                    except (ValueError, TypeError):
+                        continue
+                return None
 
             # Rule 1: Check required fields in Research and Analysis
             required_fields = [
@@ -872,7 +879,7 @@ async def extract_section(request, filename, section_name):
                 "My research _____ reveal any prior sales or transfers of the subject property for the three years prior to the effective date of this appraisal.(did/did not)",
                 "Data Source(s) for subject property research",
                 "My research ______ reveal any prior sales or transfers of the comparable sales for the year prior to the date of sale of the comparable sale.(did/did not)",
-                "Data Source(s) for comparable sales research", # Adjusted key from services.py
+                "Data Source(s) for comparable sales research",
                 "Analysis of prior sale or transfer history of the subject property and comparable sales",
             ]
             missing_fields = [field for field in required_fields if is_empty(extracted_data.get(field))]
@@ -892,53 +899,107 @@ async def extract_section(request, filename, section_name):
             subject_history_found = extracted_data.get("My research _____ reveal any prior sales or transfers of the subject property for the three years prior to the effective date of this appraisal.(did/did not)")
             if subject_history_found and str(subject_history_found).lower() == 'did':
                 subject_data = extracted_data.get('subject', {})
-                if is_empty(subject_data.get('Date of Prior Sale/Transfer')) or is_empty(subject_data.get('Price of Prior Sale/Transfer')):
+                prior_sale_date_str = subject_data.get('Date of Prior Sale/Transfer')
+                prior_sale_price = subject_data.get('Price of Prior Sale/Transfer')
+                
+                if is_empty(prior_sale_date_str) or is_empty(prior_sale_price):
                     validations.append({'status': 'error', 'message': "Report indicates a prior sale for the Subject, but 'Date' or 'Price' is missing in the grid."})
                 else:
                     validations.append({'status': 'success', 'message': "Subject prior sale details are present as required."})
+                    
+                    effective_date_str = recon_data.get('Effective Date of Value')
+                    effective_date = parse_date(effective_date_str)
+                    prior_sale_date = parse_date(prior_sale_date_str)
+
+                    if effective_date and prior_sale_date:
+                        if effective_date - prior_sale_date <= timedelta(days=3*365.25):
+                            validations.append({'status': 'success', 'message': f"Subject's prior sale date ({prior_sale_date_str}) is within 3 years of the effective date ({effective_date_str})."})
+                        else:
+                            validations.append({'status': 'error', 'message': f"Subject's prior sale date ({prior_sale_date_str}) is NOT within 3 years of the effective date ({effective_date_str})."})
+                    elif not effective_date:
+                         validations.append({'status': 'error', 'message': "Could not parse 'Effective Date of Value' from Reconciliation section to validate sale history."})
+                    elif not prior_sale_date:
+                         validations.append({'status': 'error', 'message': f"Could not parse Subject's 'Date of Prior Sale/Transfer' ({prior_sale_date_str}) to validate sale history."})
 
             # Rule 4: Conditional validation for Comparables' prior sales
             comp_history_found = extracted_data.get("My research ______ reveal any prior sales or transfers of the comparable sales for the year prior to the date of sale of the comparable sale.(did/did not)")
             if comp_history_found and str(comp_history_found).lower() == 'did':
-                comparables_data = extracted_data.get('comparables', [])
-                at_least_one_comp_has_data = False
-                if comparables_data:
-                    for comp in comparables_data:
-                        if not is_empty(comp.get('Date of Prior Sale/Transfer')) and not is_empty(comp.get('Price of Prior Sale/Transfer')):
-                            at_least_one_comp_has_data = True
-                            break
+                history_comps = extracted_data.get('comparables', [])
+                grid_comps = sales_grid_data.get('comparables', [])
                 
-                if not at_least_one_comp_has_data:
-                    validations.append({'status': 'error', 'message': "Report indicates prior sales for Comparables, but no comparable has both 'Date' and 'Price' filled in the grid."})
+                if not history_comps or not grid_comps or 'error' in sales_grid_data:
+                    validations.append({'status': 'error', 'message': "Could not retrieve comparable data from Sale History or Sales Grid to perform validation."})
                 else:
-                    validations.append({'status': 'success', 'message': "At least one comparable has prior sale details as required."})
+                    at_least_one_comp_has_prior_sale = False
+                    
+                    for i, (hist_comp, grid_comp) in enumerate(zip(history_comps, grid_comps)):
+                        prior_sale_date_str = hist_comp.get('Date of Prior Sale/Transfer')
+                        prior_sale_price = hist_comp.get('Price of Prior Sale/Transfer')
+
+                        if not is_empty(prior_sale_date_str) or not is_empty(prior_sale_price):
+                            at_least_one_comp_has_prior_sale = True
+                            
+                            if is_empty(prior_sale_date_str) or is_empty(prior_sale_price):
+                                validations.append({'status': 'error', 'message': f"Comp #{i+1} has an incomplete prior sale entry (missing Date or Price)."})
+                                continue
+
+                            comp_sale_date_str = grid_comp.get('Date of Sale/Time')
+                            comp_sale_date = parse_date(comp_sale_date_str)
+                            comp_prior_sale_date = parse_date(prior_sale_date_str)
+
+                            if comp_sale_date and comp_prior_sale_date:
+                                if comp_sale_date - comp_prior_sale_date <= timedelta(days=365):
+                                    validations.append({'status': 'success', 'message': f"Comp #{i+1}'s prior sale date ({prior_sale_date_str}) is within 1 year of its sale date ({comp_sale_date_str})."})
+                                else:
+                                    validations.append({'status': 'error', 'message': f"Comp #{i+1}'s prior sale date ({prior_sale_date_str}) is NOT within 1 year of its sale date ({comp_sale_date_str})."})
+                            elif not comp_sale_date:
+                                validations.append({'status': 'error', 'message': f"Could not parse Comp #{i+1}'s 'Date of Sale/Time' ({comp_sale_date_str}) from Sales Grid to validate its prior sale."})
+                            elif not comp_prior_sale_date:
+                                validations.append({'status': 'error', 'message': f"Could not parse Comp #{i+1}'s 'Date of Prior Sale/Transfer' ({prior_sale_date_str}) to validate its prior sale."})
+
+                    if not at_least_one_comp_has_prior_sale:
+                        validations.append({'status': 'error', 'message': "Report indicates prior sales for Comparables, but no comparable has any prior sale information in the grid."})
 
             if validations:
                 extracted_data['backend_validation_list'] = validations
+                backend_validation_data = {'validations': validations}
         # --- End of Sale History Validation ---
         
-        # --- Save Extracted Data and Validations to DB ---
-        validation_info = {}
-        if 'backend_validation' in extracted_data:
-            validation_info['backend_validation'] = extracted_data['backend_validation']
-        if 'backend_validation_list' in extracted_data:
-            validation_info['backend_validation_list'] = extracted_data['backend_validation_list']
+        # --- Backend Validation for Sales Grid Adjustment ---
+        if section_name == 'sales_grid_adjustment' and 'error' not in extracted_data:
+            analysis = extracted_data.get('adjustment_analysis', {})
+            raw_details = analysis.get('details', [])
+            structured_details = []
+            
+            for detail in raw_details:
+                status = 'info'
+                lower_detail = detail.lower()
+                
+                if 'passed' in lower_detail or ('consistent' in lower_detail and 'inconsistent' not in lower_detail):
+                    status = 'success'
+                elif 'failed' in lower_detail or 'inconsistent' in lower_detail:
+                    status = 'error'
+                elif 'questionable' in lower_detail:
+                    status = 'warning'
+                
+                structured_details.append({'status': status, 'message': detail})
+            
+            if 'adjustment_analysis' in extracted_data:
+                extracted_data['adjustment_analysis']['structured_details'] = structured_details
 
-        # Capture AI-generated validations (often displayed on frontend)
-        if 'adu_validation' in extracted_data:
-            validation_info['adu_validation'] = extracted_data['adu_validation']
-        if 'adjustment_analysis' in extracted_data:
-            validation_info['adjustment_analysis'] = extracted_data['adjustment_analysis']
-
-        await sync_to_async(ExtractedData.objects.update_or_create)(
-            user=request.user,
-            filename=filename,
-            section_name=section_name,
-            defaults={
-                'data': extracted_data,
-                'validation_results': validation_info
-            }
-        )
+            if structured_details:
+                overall_status = 'success'
+                if any(d['status'] == 'error' for d in structured_details):
+                    overall_status = 'error'
+                elif any(d['status'] == 'warning' for d in structured_details):
+                    overall_status = 'warning'
+                
+                backend_validation_data = {
+                    'status': overall_status,
+                    'message': analysis.get('summary', 'Adjustment analysis completed.'),
+                    'validations': structured_details
+                }
+        # --- End of Sales Grid Adjustment Validation ---
 
         # --- FHA Case Detection for Subject Section ---
         is_fha_case = False
@@ -967,6 +1028,15 @@ async def extract_section(request, filename, section_name):
 
         # Flag to show the revision helper for the subject section
         show_revision_helper = section_name.lower() in ['subject', 'contract', 'neighborhood', 'site', 'improvements', 'sales_grid', 'sale_history', 'reconciliation', 'cost_approach', 'rental_grid']
+
+        # Save extraction and backend validation results to the database
+        await sync_to_async(save_extraction_result_sync)(
+            request.user,
+            filename,
+            section_name,
+            extracted_data,
+            backend_validation_data
+        )
 
         # Pass the dictionary to the result template
         context = {
@@ -1016,103 +1086,37 @@ def generate_report(request):
     return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)
 
 @login_required
-def history_view(request):
-    """
-    Displays a list of all extracted sections saved by the current user.
-    """
-    query = request.GET.get('q')
-    extracted_data_list = ExtractedData.objects.filter(user=request.user)
-
-    if query:
-        extracted_data_list = extracted_data_list.filter(filename__icontains=query)
-
-    extracted_data_list = extracted_data_list.order_by('-updated_at')
-
-    paginator = Paginator(extracted_data_list, 10)  # Show 10 records per page
-    page = request.GET.get('page')
-    try:
-        extracted_data_list = paginator.page(page)
-    except PageNotAnInteger:
-        extracted_data_list = paginator.page(1)
-    except EmptyPage:
-        extracted_data_list = paginator.page(paginator.num_pages)
-
-    return render(request, 'history.html', {'extracted_data_list': extracted_data_list, 'query': query})
-
-@login_required
-def history_detail_view(request, pk):
-    """
-    Displays the details of a specific extracted data record, including raw JSON.
-    """
-    extracted_data = get_object_or_404(ExtractedData, pk=pk, user=request.user)
-    formatted_data = json.dumps(extracted_data.data, indent=4)
-    formatted_validation = json.dumps(extracted_data.validation_results, indent=4) if extracted_data.validation_results else "{}"
-    
-    return render(request, 'history_detail.html', {
-        'extracted_data': extracted_data,
-        'formatted_data': formatted_data,
-        'formatted_validation': formatted_validation
-    })
-
-@login_required
-def export_history_csv(request):
-    """
-    Exports the filtered history list to a CSV file.
-    """
-    query = request.GET.get('q')
-    start_date = request.GET.get('start_date')
-    end_date = request.GET.get('end_date')
-
-    extracted_data_list = ExtractedData.objects.filter(user=request.user)
-
-    if query:
-        extracted_data_list = extracted_data_list.filter(filename__icontains=query)
-    if start_date:
-        extracted_data_list = extracted_data_list.filter(updated_at__date__gte=start_date)
-    if end_date:
-        extracted_data_list = extracted_data_list.filter(updated_at__date__lte=end_date)
-    
-    extracted_data_list = extracted_data_list.order_by('-updated_at')
-
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename="extraction_history.csv"'
-
-    writer = csv.writer(response)
-    writer.writerow(['Filename', 'Section', 'Status', 'Created At', 'Last Updated'])
-
-    for item in extracted_data_list:
-        status = 'Error' if item.data.get('error') else 'Success'
-        writer.writerow([item.filename, item.section_name, status, item.created_at, item.updated_at])
-
-    return response
-
-@login_required
-def bulk_delete_history(request):
-    """
-    Deletes multiple ExtractedData items for the current user.
-    """
+@csrf_exempt
+def save_frontend_validation_view(request):
+    """API endpoint to save frontend validation results."""
     if request.method == 'POST':
-        item_ids = request.POST.getlist('selected_items')
-        if item_ids:
-            deleted_count, _ = ExtractedData.objects.filter(
-                id__in=item_ids, 
-                user=request.user
-            ).delete()
-            messages.success(request, f"{deleted_count} history items deleted.")
-        else:
-            messages.warning(request, "No items selected for deletion.")
-    return redirect('history')
+        try:
+            data = json.loads(request.body)
+            filename = data.get('filename')
+            section_name = data.get('section_name')
+            frontend_validation = data.get('validation_results')
+            
+            ExtractionResult.objects.update_or_create(
+                filename=filename,
+                section_name=section_name,
+                defaults={
+                    'frontend_validation': frontend_validation,
+                    'user': request.user
+                }
+            )
+            return JsonResponse({'status': 'success'})
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    return JsonResponse({'status': 'error', 'message': 'Invalid request'}, status=400)
 
 @login_required
-def delete_history_item(request, pk):
+def file_extraction_history_view(request, filename):
     """
-    Deletes a specific ExtractedData item for the current user.
+    Displays the extraction history (saved results) for a specific file.
     """
-    if request.method == 'POST':
-        history_item = get_object_or_404(ExtractedData, pk=pk, user=request.user)
-        history_item.delete()
-        messages.success(request, f"History item for '{history_item.filename} - {history_item.section_name}' has been deleted.")
-    return redirect('history')
+    results = ExtractionResult.objects.filter(filename=filename, user=request.user).order_by('section_name')
+    
+    return render(request, 'file_extraction_history.html', {'filename': filename, 'results': results})
 
 @login_required
 async def get_section_data_api(request, filename, section_name):

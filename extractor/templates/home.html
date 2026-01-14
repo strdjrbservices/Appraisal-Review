@@ -1,10 +1,8 @@
 {% extends 'base.html' %}
-{% load math_filters %}
 {% load dict_helpers %}
 
 {% block title %}Select Section to Review{% endblock %}
 {% block extra_css %}
-{% include '_stats_widget_css.html' %}
 <style>
     body {
         background-color: var(--primary-bg);
@@ -26,7 +24,6 @@
 
     <div class="main-grid">
         <div class="file-details-column">
-            {% include '_stats_widget.html' %}
             <div class="card">
                 <h3>File Details</h3>
                 <div class="detail-item">
@@ -119,6 +116,7 @@
 
     <div class="footer-actions">
         <a href="{% url 'upload_pdf' %}" class="upload-another-link">← Upload a different file</a>
+        <a href="{% url 'file_extraction_history' filename=filename %}" class="upload-another-link" style="margin-left: 20px;">View Extraction History →</a>
     </div>
     
 </div>

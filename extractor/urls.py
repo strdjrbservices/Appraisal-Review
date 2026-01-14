@@ -21,11 +21,8 @@ urlpatterns = [
     path('review/update/', views.update_file_review_upload_view, name='update_file_review_upload'),
     path('review/update/process/', views.update_file_review_process_view, name='update_file_review_process'),
     path('review/update/custom-analysis/', views.update_file_review_custom_analysis_view, name='update_file_review_custom_analysis'),
-    path('history/', views.history_view, name='history'),
-    path('history/<int:pk>/', views.history_detail_view, name='history_detail'),
-    path('history/export-csv/', views.export_history_csv, name='export_history_csv'),
-    path('history/delete/<int:pk>/', views.delete_history_item, name='delete_history'),
-    path('history/bulk-delete/', views.bulk_delete_history, name='bulk_delete_history'),
+    path('save-frontend-validation/', views.save_frontend_validation_view, name='save_frontend_validation'),
+    path('history/<str:filename>/', views.file_extraction_history_view, name='file_extraction_history'),
     
     # API endpoint for fetching section data
     path('api/data/<str:filename>/<str:section_name>/', views.get_section_data_api, name='get_section_data_api'),

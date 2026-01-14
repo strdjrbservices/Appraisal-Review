@@ -21,6 +21,7 @@ SUBJECT_FIELDS = [
     'Census Tract', 'Occupant', 'Special Assessments $', 'PUD', 'HOA $', 'HOA(per year/per month)',
     'Property Rights Appraised', 'Assignment Type', 'Lender/Client', 'Address (Lender/Client)',
     'Offered for Sale in Last 12 Months', 'Report data source(s) used, offering price(s), and date(s)',
+    'ANSI Standard Confirmation', 'Reasonable Exposure Time Comment', 'Prior Service Certification'
 ]
 
 # CONTRACT
@@ -28,7 +29,7 @@ CONTRACT_FIELDS = [
     'I _____ analyze the contract for sale for the subject purchase transaction.', 
     'Explain the results of the analysis of the contract for sale or why the analysis was not performed.',
     'Contract Price $', 'Date of Contract', 'Is the property seller the owner of public record?(Yes/No)', 'Data Source(s)',
-    'Is there any financial assistance (loan charges, sale concessions, gift or downpayment assistance, etc.) to be paid by any party on behalf of the borrower?(Yes/No)',
+    'Is there any financial assistance (loan charges, sale concessions, gift or downpay i etc.) to be paid by any party on behalf of the borrower?(Yes/No)',
     'If Yes, report the total dollar amount and describe the items to be paid.',
 ]
 
@@ -117,6 +118,7 @@ SALES_COMPARISON_APPROACH_FIELDS_ADJUSTMENT = [
     "Quality of Construction", "Quality of Construction Adjustment",
     "Actual Age", "Actual Age Adjustment",
     "Condition", "Condition Adjustment",
+    "Total Rooms", "Bedrooms", "Baths",
     "Gross Living Area", "Gross Living Area Adjustment",
     "Basement & Finished Rooms Below Grade", "Basement & Finished Rooms Below Grade Adjustment",
     "Functional Utility", "Functional Utility Adjustment",
@@ -950,22 +952,21 @@ async def extract_fields_from_pdf(pdf_paths, section_name: str, custom_prompt: s
         1.  **Extract Data:** For the subject and each comparable, extract all fields listed below. Use `null` for blank/missing fields. Pay attention to negative signs for adjustments.
             *   **Note:** You must also locate the "Indicated Value by Sales Comparison Approach" (typically found below the sales grid) to perform the value analysis checks.
         2.  **Perform Detailed Validation and Analysis (Apply these rules):**
-            *   **1. Proximity:** Verify if "Proximity to Subject" for all comparables is within 1 mile.
+            *   **1. Proximity:** Verify if "Proximity to Subject" for all comparables is within 10 miles.
             *   **2. Value Analysis:** 
                 *   Check if the "Indicated Value by Sales Comparison Approach" is bracketed by (i.e., between) the highest and lowest "Adjusted Sale Price of Comparable".
-                *   Check if the "Indicated Value by Sales Comparison Approach" is more than 25% higher than the unadjusted "Sale Price" of any comparable. (Note: If it is within 25%, it is acceptable).
+                *   Check if the "Indicated Value by Sales Comparison Approach" is more than 25% higher than the unadjusted "Sale Price" of any comparable. (Note: If it is within 25%, it is acceptable/Okay).
             *   **3. Required Fields:** Verify that "Sale Price/Gross Liv. Area", "Data Source(s)", and "Verification Source(s)" have values for all comparables.
-            *   **4. Concessions:** If "Sale or Financing Concessions" has a positive value, the "Sale or Financing Concessions Adjustment" must be negative. If it is 0/None, the adjustment should be 0.
+            *   **4. Concessions:** If "Sale or Financing Concessions" has a positive value, the "Sale or Financing Concessions Adjustment" must be negative, and vice versa.
             *   **5. Date of Sale:** 
                 *   Verify if "Date of Sale/Time" is within 1 year of the effective date.
-                *   Check if the "Date of Sale/Time" is greater than the subject's "Date of Contract".
+                *   Check if the "Date of Sale/Time" is greater than (after) the subject's "Date of Contract".
                 *   If "Date of Sale/Time Adjustment" is present (not 0), verify that a comment and graph are present in the report explaining it.
             *   **6-22. Adjustment Consistency:** For each of the following features, check if the adjustment direction is correct based on the comparison between Subject and Comparable.
                 *   **Rule:** If Comparable is Superior to Subject -> Adjustment should be Negative. If Comparable is Inferior -> Adjustment should be Positive. If Equal -> Adjustment should be 0.
                 *   **Features:** "Location", "Leasehold/Fee Simple", "Site", "View", "Design (Style)", "Quality of Construction", "Actual Age", "Condition", "Bdrms", "Baths", "Gross Living Area", "Basement & Finished Rooms Below Grade", "Functional Utility", "Heating/Cooling", "Energy Efficient Items", "Garage/Carport", "Porch/Patio/Deck".
-            *   **23-24. Calculations:**
-                *   Recalculate "Net Adjustment (Total)" and compare with the extracted value.
-                *   Recalculate "Adjusted Sale Price of Comparable" and compare with the extracted value.
+            *   **23. Net Adjustment:** Recalculate "Net Adjustment (Total)" and compare with the extracted value.
+            *   **24. Adjusted Sale Price:** Recalculate "Adjusted Sale Price of Comparable" and compare with the extracted value.
 
         3.  **Report Findings:** In the `"details"` array, report the outcome of each check.
 
